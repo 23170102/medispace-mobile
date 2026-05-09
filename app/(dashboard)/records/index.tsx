@@ -65,18 +65,6 @@ export default function MedicalRecordsScreen() {
     );
   }, [searchQuery, patients]);
 
-  if (!isDoctor && !isLoading) {
-    return (
-      <View style={styles.center}>
-        <Ionicons name="lock-closed" size={64} color={Colors.textMuted} style={{ marginBottom: 20 }} />
-        <Text style={styles.emptyText}>Acceso restringido. Los administradores no tienen permisos para ver expedientes clínicos.</Text>
-        <TouchableOpacity onPress={() => router.replace('/(dashboard)/home')} style={[styles.viewBtn, { marginTop: 20, width: '60%' }]}>
-          <Text style={styles.viewBtnText}>Volver al Inicio</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }
-
   const renderPatientCard = useCallback(({ item }: { item: any }) => (
     <TouchableOpacity 
       style={styles.patientCard}
@@ -106,6 +94,18 @@ export default function MedicalRecordsScreen() {
       </TouchableOpacity>
     </TouchableOpacity>
   ), []);
+
+  if (!isDoctor && !isLoading) {
+    return (
+      <View style={styles.center}>
+        <Ionicons name="lock-closed" size={64} color={Colors.textMuted} style={{ marginBottom: 20 }} />
+        <Text style={styles.emptyText}>Acceso restringido. Los administradores no tienen permisos para ver expedientes clínicos.</Text>
+        <TouchableOpacity onPress={() => router.replace('/(dashboard)/home')} style={[styles.viewBtn, { marginTop: 20, width: '60%' }]}>
+          <Text style={styles.viewBtnText}>Volver al Inicio</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
