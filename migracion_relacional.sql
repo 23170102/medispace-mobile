@@ -93,7 +93,8 @@ CREATE TABLE IF NOT EXISTS public.doctor_assignments (
     start_time TIME,
     end_time TIME,
     doctor_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
-    office_id UUID REFERENCES public.offices(id) ON DELETE CASCADE
+    office_id UUID REFERENCES public.offices(id) ON DELETE CASCADE,
+    CONSTRAINT unique_doctor_schedule UNIQUE (doctor_id, office_id, day_of_week, start_time, end_time)
 );
 
 -- Saved Payment Methods
@@ -120,7 +121,8 @@ CREATE TABLE IF NOT EXISTS public.appointments (
     patient_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
     doctor_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
     notes TEXT,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    CONSTRAINT unique_doctor_slot UNIQUE (doctor_id, start_time)
 );
 
 -- Medical Records

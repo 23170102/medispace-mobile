@@ -77,7 +77,7 @@ export default function ReceptionistOpsScreen() {
 
   const checkInMutation = useMutation({
     mutationFn: async (appointmentId: string) => {
-      const { error } = await supabase.from('appointments').update({ status: 'arrived' as any }).eq('id', appointmentId);
+      const { error } = await supabase.from('appointments').update({ status: 'arrived' }).eq('id', appointmentId);
       if (error) throw error;
     },
     onSuccess: () => {

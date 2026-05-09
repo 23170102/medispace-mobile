@@ -104,11 +104,11 @@ export default function CreateStaffScreen() {
     }
   };
 
-  const renderInput = (label: string, value: string, onChange: (t: string) => void, icon: string, placeholder: string, secure = false, keyboard: any = 'default') => (
+  const renderInput = (label: string, value: string, onChange: (t: string) => void, icon: React.ComponentProps<typeof Ionicons>['name'], placeholder: string, secure = false, keyboard: any = 'default') => (
     <View style={styles.inputGroup}>
       <Text style={styles.label}>{label}</Text>
       <View style={styles.inputContainer}>
-        <Ionicons name={icon as any} size={18} color={Colors.textMuted} style={styles.inputIcon} />
+        <Ionicons name={icon} size={18} color={Colors.textMuted} style={styles.inputIcon} />
         <TextInput
           style={styles.input}
           value={value}

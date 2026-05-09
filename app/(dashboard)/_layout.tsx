@@ -3,6 +3,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { useAuth } from '../../hooks/useAuth';
 import { Colors, Shadows } from '../../constants/theme';
+import { getPrimaryRole, ROLES } from '../../constants/types';
 
 export default function DashboardLayout() {
   const { roles, loading, user } = useAuth();
@@ -15,10 +16,7 @@ export default function DashboardLayout() {
     );
   }
 
-  const primaryRole = roles.includes('admin') ? 'admin'
-    : roles.includes('doctor') ? 'doctor'
-    : roles.includes('receptionist') ? 'receptionist'
-    : 'patient';
+  const primaryRole = getPrimaryRole(roles);
 
   return (
     <Tabs

@@ -155,7 +155,7 @@ export default function AppointmentsScreen() {
       const { error } = await supabase
         .from('appointments')
         .update({ 
-          status: 'cancelled' as any,
+          status: 'cancelled',
           notes: notes || (isStaff ? 'Cancelada por recepcionista' : 'Cancelada por el paciente')
         })
         .eq('id', appointmentId);
@@ -224,7 +224,7 @@ export default function AppointmentsScreen() {
     mutationFn: async ({ id, status, notes }: { id: string; status: string; notes?: string }) => {
       const { error } = await supabase
         .from('appointments')
-        .update({ status: status as any, notes: notes })
+        .update({ status, notes })
         .eq('id', id);
       if (error) throw error;
     },
@@ -249,6 +249,7 @@ export default function AppointmentsScreen() {
     }
     switch (status) {
       case 'confirmed': return { label: 'Confirmada', color: '#16a34a', bg: '#dcfce7', icon: 'checkmark-circle' as const };
+      case 'arrived': return { label: 'En Sala', color: '#2563eb', bg: '#eff6ff', icon: 'enter' as const };
       case 'scheduled': return { label: 'Programada', color: '#ca8a04', bg: '#fef9c3', icon: 'time' as const };
       case 'cancelled': return { label: 'Cancelada', color: '#dc2626', bg: '#fef2f2', icon: 'close-circle' as const };
       case 'completed': return { label: 'Completada', color: '#6b7280', bg: '#f3f4f6', icon: 'checkmark-done-circle' as const };
@@ -355,7 +356,7 @@ export default function AppointmentsScreen() {
                       </View>
                     )}
                     <View style={styles.cardActions}>
-                      {isDoctor && ['scheduled', 'confirmed'].includes(apt.status) && (
+                      {isDoctor && apt.status === 'arrived' && (
                         <TouchableOpacity 
                           style={styles.attendBtn} 
                           onPress={() => router.push(`/(dashboard)/records/${apt.patient_id}?appointmentId=${apt.id}`)}

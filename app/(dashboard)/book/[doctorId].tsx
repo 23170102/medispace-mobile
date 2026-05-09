@@ -1,7 +1,7 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator, TextInput, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Calendar, LocaleConfig } from 'react-native-calendars';
 import { Ionicons } from '@expo/vector-icons';
@@ -13,6 +13,7 @@ import * as Sharing from 'expo-sharing';
 import { useAuth } from '../../../hooks/useAuth';
 import { supabase } from '../../../lib/supabase';
 import { Colors, Spacing, FontSizes, BorderRadius, Shadows } from '../../../constants/theme';
+import { DB_ERROR_CODES } from '../../../constants/types';
 
 LocaleConfig.locales['es'] = {
   monthNames: ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'],
@@ -48,15 +49,17 @@ export default function BookAppointmentScreen() {
   const [cardExpiry, setCardExpiry] = useState('');
   const [cardCvv, setCardCvv] = useState('');
 
-  // REINICIAR VISTA AL CAMBIAR DE DOCTOR
-  useEffect(() => {
-    setShowVoucher(false);
-    setSelectedSlot(null);
-    setSelectedDate('');
-    if (!isStaff) {
-      setSelectedPatient({ id: user?.id, first_name: 'Yo', last_name: '' });
-    }
-  }, [doctorId, user?.id, isStaff]);
+  // REINICIAR VISTA AL ENTRAR A LA PANTALLA O CAMBIAR DE DOCTOR
+  useFocusEffect(
+    useCallback(() => {
+      setShowVoucher(false);
+      setSelectedSlot(null);
+      setSelectedDate('');
+      if (!isStaff) {
+        setSelectedPatient({ id: user?.id, first_name: 'Yo', last_name: '' });
+      }
+    }, [doctorId, user?.id, isStaff])
+  );
 
   const searchPatients = async (query: string) => {
     setPatientSearch(query);
@@ -250,6 +253,7 @@ export default function BookAppointmentScreen() {
   const bookMutation = useMutation({
     mutationFn: async () => {
       if (!selectedSlot || !selectedDate || !user) throw new Error('Faltan datos');
+      if (isStaff && !selectedPatient) throw new Error('Selecciona un paciente para agendar la cita');
       
       if (paymentMethod === 'card') {
         if (cardNumber.length < 19 || cardExpiry.length < 5 || cardCvv.length < 3) {
@@ -266,7 +270,7 @@ export default function BookAppointmentScreen() {
         doctor_id: doctorId,
         office_id: selectedSlot.office.id,
         start_time: new Date(`${selectedDate}T${selectedSlot.start}:00`).toISOString(),
-        status: (paymentMethod === 'card' ? 'confirmed' : 'scheduled') as any,
+        status: paymentMethod === 'card' ? 'confirmed' : 'scheduled',
         total_price: fee,
         amount_paid: amountToPay,
         payment_method: paymentMethod,
@@ -291,7 +295,12 @@ export default function BookAppointmentScreen() {
         setShowVoucher(true);
       }
     },
-    onError: (err: any) => Toast.show({ type: 'error', text1: 'Error', text2: err.message }),
+    onError: (err: any) => {
+      const msg = err?.code === DB_ERROR_CODES.UNIQUE_VIOLATION
+        ? 'Este horario ya fue reservado por otro paciente.'
+        : err.message;
+      Toast.show({ type: 'error', text1: 'Error', text2: msg });
+    },
   });
 
   const handleDownloadPDF = async () => {

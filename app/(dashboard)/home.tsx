@@ -8,6 +8,7 @@ import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../../hooks/useAuth';
 import { Colors, Spacing, BorderRadius, Gradients, Shadows } from '../../constants/theme';
+import { getPrimaryRole, getRoleLabel } from '../../constants/types';
 
 import AdminDashboard from '../../components/dashboard/AdminDashboard';
 import DoctorDashboard from '../../components/dashboard/DoctorDashboard';
@@ -20,10 +21,7 @@ export default function HomeScreen() {
   const queryClient = useQueryClient();
   const [refreshing, setRefreshing] = useState(false);
 
-  const primaryRole = roles.includes('admin') ? 'admin'
-    : roles.includes('doctor') ? 'doctor'
-    : roles.includes('receptionist') ? 'receptionist'
-    : 'patient';
+  const primaryRole = getPrimaryRole(roles);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -73,10 +71,7 @@ export default function HomeScreen() {
                 size={14} color="white" 
               />
               <Text style={styles.roleTagText}>
-  {primaryRole === 'admin' ? 'ADMINISTRADOR' 
-   : primaryRole === 'doctor' ? 'DOCTOR' 
-   : primaryRole === 'receptionist' ? 'RECEPCIONISTA' 
-   : 'PACIENTE'}
+  {getRoleLabel(primaryRole)}
 </Text>
             </View>
             {primaryRole === 'patient' && (

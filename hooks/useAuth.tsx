@@ -197,13 +197,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
+      Toast.show({ type: 'success', text1: 'Sesión cerrada' });
     } catch (error: any) {
       console.error('SignOut error:', error.message);
-      // Forzamos limpieza local aunque falle el servidor
       clearAuth();
-      Toast.show({ type: 'error', text1: 'Error al cerrar sesión', text2: 'Se ha forzado el cierre local.' });
-    } finally {
-      Toast.show({ type: 'success', text1: 'Sesión cerrada' });
+      Toast.show({ type: 'error', text1: 'Error', text2: 'No se pudo cerrar sesión. Se ha forzado el cierre local.' });
     }
   };
 

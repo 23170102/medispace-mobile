@@ -143,7 +143,10 @@ export default function GlobalOfficesScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <View>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+          <Ionicons name="arrow-back" size={24} color={Colors.primary} />
+        </TouchableOpacity>
+        <View style={{ flex: 1 }}>
           <Text style={styles.headerTitle}>Consultorios</Text>
           <Text style={styles.headerSubtitle}>Infraestructura operativa</Text>
         </View>
@@ -294,6 +297,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
     paddingHorizontal: Spacing.lg, paddingVertical: Spacing.xl,
   },
+  backBtn: { marginRight: 12, padding: 4 },
   headerTitle: { fontSize: 26, fontWeight: '800', color: Colors.primary },
   headerSubtitle: { fontSize: 13, color: Colors.textMuted, fontWeight: '600' },
   addBtn: { 

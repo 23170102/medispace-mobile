@@ -60,11 +60,11 @@ export default function EditProfileScreen() {
     }
   };
 
-  const renderInput = (label: string, key: keyof typeof formData, icon: string, placeholder: string, keyboardType: any = 'default') => (
+  const renderInput = (label: string, key: keyof typeof formData, icon: React.ComponentProps<typeof Ionicons>['name'], placeholder: string, keyboardType: any = 'default') => (
     <View style={styles.inputGroup}>
       <Text style={styles.label}>{label}</Text>
       <View style={styles.inputContainer}>
-        <Ionicons name={icon as any} size={20} color={Colors.textMuted} style={styles.inputIcon} />
+        <Ionicons name={icon} size={20} color={Colors.textMuted} style={styles.inputIcon} />
         <TextInput
           style={styles.input}
           value={formData[key]}

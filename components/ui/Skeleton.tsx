@@ -37,7 +37,7 @@ const Skeleton = ({ width = '100%', height = 20, borderRadius = 8, style }: Skel
     <View
       style={[
         styles.skeleton,
-        { width: width as any, height: height as any, borderRadius },
+        { width: width as number, height: height as number, borderRadius },
         style,
       ]}
     >

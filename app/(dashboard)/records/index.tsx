@@ -134,7 +134,7 @@ export default function MedicalRecordsScreen() {
       ) : (
         <FlatList
           data={filteredPatients}
-          keyExtractor={item => item.user_id || item.id}
+          keyExtractor={item => item.user_id}
           renderItem={renderPatientCard}
           numColumns={2}
           columnWrapperStyle={styles.columnWrapper}

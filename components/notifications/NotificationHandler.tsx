@@ -27,7 +27,7 @@ export default function NotificationHandler() {
       console.log('User interacted with notification:', data);
 
       if (data?.targetRoute) {
-        router.push(data.targetRoute as any);
+        router.push(data.targetRoute as string);
       }
     });
 

@@ -8,6 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../hooks/useAuth';
 import { supabase } from '../../lib/supabase';
 import { Colors, Spacing, FontSizes, BorderRadius } from '../../constants/theme';
+import { getPrimaryRole } from '../../constants/types';
 
 export default function CatalogScreen() {
   const { roles, user } = useAuth();
@@ -15,10 +16,7 @@ export default function CatalogScreen() {
   const [search, setSearch] = useState('');
   const [refreshing, setRefreshing] = useState(false);
 
-  const primaryRole = roles.includes('admin') ? 'admin'
-    : roles.includes('doctor') ? 'doctor'
-    : roles.includes('receptionist') ? 'receptionist'
-    : 'patient';
+  const primaryRole = getPrimaryRole(roles);
 
   const { data: doctors, isLoading, error, refetch } = useQuery({
     queryKey: ['doctors-catalog'],
@@ -124,7 +122,7 @@ export default function CatalogScreen() {
         ) : (
           filtered.map((doctor, i) => (
             <TouchableOpacity
-              key={i}
+              key={doctor.user_id}
               style={styles.doctorCard}
               activeOpacity={0.7}
               onPress={() => router.push(`/(dashboard)/book/${doctor.user_id}`)}

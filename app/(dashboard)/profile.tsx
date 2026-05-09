@@ -12,6 +12,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../../hooks/useAuth';
 import { supabase } from '../../lib/supabase';
 import { Colors, Spacing, FontSizes, BorderRadius, Shadows } from '../../constants/theme';
+import { getRoleLabel, getPrimaryRole } from '../../constants/types';
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -26,10 +27,7 @@ export default function ProfileScreen() {
     setRefreshing(false);
   };
 
-  const primaryRole = roles?.includes('admin') ? 'Administrador'
-    : roles?.includes('doctor') ? 'Doctor'
-    : roles?.includes('receptionist') ? 'Recepcionista'
-    : 'Paciente';
+  const primaryRole = getRoleLabel(getPrimaryRole(roles));
 
   const pickImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -198,7 +196,7 @@ export default function ProfileScreen() {
               activeOpacity={0.7}
             >
               <View style={[styles.menuIconContainer, { backgroundColor: `${item.color}15` }]}>
-                <Ionicons name={item.icon as any} size={22} color={item.color} />
+              <Ionicons name={item.icon as React.ComponentProps<typeof Ionicons>['name']} size={22} color={item.color} />
               </View>
               <Text style={styles.menuTitle}>{item.title}</Text>
               <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />

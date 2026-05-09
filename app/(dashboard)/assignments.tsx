@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, Modal, ActivityIndicator, Alert, ScrollView, RefreshControl, Platform, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -9,6 +9,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { useAuth } from '../../hooks/useAuth';
 import { supabase } from '../../lib/supabase';
 import { Colors, Spacing, FontSizes, BorderRadius, Shadows } from '../../constants/theme';
+import Toast from 'react-native-toast-message';
 
 const daysList = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
 const shortDays = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
@@ -26,6 +27,7 @@ export default function GlobalAssignmentsScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [doctorSearch, setDoctorSearch] = useState('');
   const [selectedHours, setSelectedHours] = useState<number[]>([]);
+  const isSubmitting = useRef(false);
 
   // 0. Manage Fee (Doctors only)
   useEffect(() => {
@@ -160,77 +162,84 @@ export default function GlobalAssignmentsScreen() {
 
   const createAssignmentMutation = useMutation({
     mutationFn: async () => {
-      if (!selectedDoctorId || !selectedOfficeId || selectedDays.length === 0) return;
-      if (modality === 'hourly' && selectedHours.length === 0) return;
+      if (isSubmitting.current) return;
+      isSubmitting.current = true;
+      try {
+        if (!selectedDoctorId || !selectedOfficeId || selectedDays.length === 0) throw new Error('Selecciona médico, consultorio y días');
+        if (modality === 'hourly' && selectedHours.length === 0) throw new Error('Selecciona al menos una hora');
 
-      const newStart = modality === 'daily' ? format(startTime, 'HH:mm:ss') : '';
-      const newEnd = modality === 'daily' ? format(endTime, 'HH:mm:ss') : '';
+        const newStart = modality === 'daily' ? format(startTime, 'HH:mm:ss') : '';
+        const newEnd = modality === 'daily' ? format(endTime, 'HH:mm:ss') : '';
 
-      // 1. Fetch ALL existing assignments to check for conflicts
-      const { data: existing, error: fetchError } = await supabase
-        .from('doctor_assignments')
-        .select(`
-          *,
-          profiles(first_name, last_name),
-          offices(name)
-        `)
-        .in('day_of_week', selectedDays);
+        const { data: existing, error: fetchError } = await supabase
+          .from('doctor_assignments')
+          .select(`
+            *,
+            profiles(first_name, last_name),
+            offices(name)
+          `)
+          .in('day_of_week', selectedDays);
 
-      if (fetchError) throw fetchError;
+        if (fetchError) throw fetchError;
 
-      // 2. Validate conflicts
-      const slotRanges = modality === 'hourly'
-        ? selectedHours.map(h => ({ start: `${h}:00:00`, end: `${h + 1}:00:00` }))
-        : [{ start: newStart, end: newEnd }];
+        const slotRanges = modality === 'hourly'
+          ? selectedHours.map(h => ({ start: `${h}:00:00`, end: `${h + 1}:00:00` }))
+          : [{ start: newStart, end: newEnd }];
 
-      for (const day of selectedDays) {
-        const dayConflicts = existing?.filter(ex => ex.day_of_week === day) || [];
-        
-        for (const slot of slotRanges) {
-          for (const ex of dayConflicts) {
-            const overlap = (slot.start < ex.end_time && slot.end > ex.start_time);
-            if (!overlap) continue;
+        for (const day of selectedDays) {
+          const dayConflicts = existing?.filter(ex => ex.day_of_week === day) || [];
+          
+          for (const slot of slotRanges) {
+            for (const ex of dayConflicts) {
+              const overlap = (slot.start < ex.end_time && slot.end > ex.start_time);
+              if (!overlap) continue;
 
-            const profileData = Array.isArray(ex.profiles) ? ex.profiles[0] : ex.profiles;
-            const docName = profileData ? `Dr. ${profileData.first_name} ${profileData.last_name}` : 'el médico';
+              const profileData = Array.isArray(ex.profiles) ? ex.profiles[0] : ex.profiles;
+              const docName = profileData ? `Dr. ${profileData.first_name} ${profileData.last_name}` : 'el médico';
 
-            if (ex.doctor_id === selectedDoctorId) {
-              const dayName = daysList[day];
-              throw new Error(
-                `Conflicto de Horario: El ${docName} ya tiene una asignación el ${dayName} de ${ex.start_time.slice(0, 5)} a ${ex.end_time.slice(0, 5)} en ${ex.offices?.name}.`
-              );
-            }
+              if (ex.doctor_id === selectedDoctorId) {
+                const dayName = daysList[day];
+                throw new Error(
+                  `Conflicto de Horario: El ${docName} ya tiene una asignación el ${dayName} de ${ex.start_time.slice(0, 5)} a ${ex.end_time.slice(0, 5)} en ${ex.offices?.name}.`
+                );
+              }
 
-            if (ex.office_id === selectedOfficeId) {
-              const dayName = daysList[day];
-              throw new Error(
-                `Conflicto de Consultorio: El consultorio "${ex.offices?.name}" ya está ocupado el ${dayName} de ${ex.start_time.slice(0, 5)} a ${ex.end_time.slice(0, 5)} por ${docName}.`
-              );
+              if (ex.office_id === selectedOfficeId) {
+                const dayName = daysList[day];
+                throw new Error(
+                  `Conflicto de Consultorio: El consultorio "${ex.offices?.name}" ya está ocupado el ${dayName} de ${ex.start_time.slice(0, 5)} a ${ex.end_time.slice(0, 5)} por ${docName}.`
+                );
+              }
             }
           }
         }
-      }
 
-      const inserts = selectedDays.flatMap(day =>
-        slotRanges.map(slot => ({
-          doctor_id: selectedDoctorId,
-          office_id: selectedOfficeId,
-          day_of_week: day,
-          start_time: slot.start,
-          end_time: slot.end,
-          modality: modality,
-        }))
-      );
-      
-      const { error } = await supabase.from('doctor_assignments').insert(inserts);
-      if (error) throw error;
+        const inserts = selectedDays.flatMap(day =>
+          slotRanges.map(slot => ({
+            doctor_id: selectedDoctorId,
+            office_id: selectedOfficeId,
+            day_of_week: day,
+            start_time: slot.start,
+            end_time: slot.end,
+            modality: modality,
+          }))
+        );
+        
+        const { error } = await supabase.from('doctor_assignments').insert(inserts);
+        if (error) throw error;
+      } finally {
+        isSubmitting.current = false;
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-global-assignments'] });
       Alert.alert('Éxito', 'Horarios asignados correctamente');
       closeModal();
     },
-    onError: (err: any) => Alert.alert('Error', err.message),
+    onError: (err: any) => {
+      const msg = err?.code === '23505' ? 'Ya existe ese horario asignado.' : err.message;
+      Alert.alert('Error', msg);
+    },
   });
 
   const deleteAssignmentMutation = useMutation({
@@ -240,6 +249,7 @@ export default function GlobalAssignmentsScreen() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-global-assignments'] });
+      Toast.show({ type: 'success', text1: 'Horario eliminado' });
     },
     onError: (err: any) => Alert.alert('Error', err.message),
   });
@@ -306,8 +316,8 @@ export default function GlobalAssignmentsScreen() {
                 <TouchableOpacity 
                   style={styles.deleteIconBtn}
                   onPress={() => {
-                    Alert.alert('Eliminar', '¿Eliminar este turno?', [
-                      { text: 'Cancelar' },
+                    Alert.alert('Eliminar Horario', '¿Estás seguro? Esta acción no se puede deshacer.', [
+                      { text: 'Cancelar', style: 'cancel' },
                       { text: 'Eliminar', style: 'destructive', onPress: () => deleteAssignmentMutation.mutate(schedule.id) }
                     ]);
                   }}
@@ -336,6 +346,9 @@ export default function GlobalAssignmentsScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+          <Ionicons name="arrow-back" size={24} color={Colors.primary} />
+        </TouchableOpacity>
         <Text style={styles.headerTitle}>{isDoctor ? 'Mi Consultorio' : 'Horarios'}</Text>
         {!isDoctor && (
           <TouchableOpacity style={styles.topAddBtn} onPress={() => setModalVisible(true)}>
@@ -622,6 +635,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.lg, paddingVertical: Spacing.md, backgroundColor: 'white',
     borderBottomWidth: 1, borderBottomColor: '#e2e8f0',
   },
+  backBtn: { marginRight: 12, padding: 4 },
   headerTitle: { fontSize: 22, fontWeight: '900', color: Colors.primary, letterSpacing: -0.5 },
   headerSubtitle: { display: 'none' },
   topAddBtn: { 

@@ -138,7 +138,10 @@ export default function BentoUserManagementScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <View>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+          <Ionicons name="arrow-back" size={24} color={Colors.primary} />
+        </TouchableOpacity>
+        <View style={{ flex: 1 }}>
           <Text style={styles.headerTitle}>Gestión de Usuarios</Text>
           <Text style={styles.headerSubtitle}>Administración de equipo</Text>
         </View>
@@ -167,15 +170,15 @@ export default function BentoUserManagementScreen() {
       </View>
 
       <View style={styles.filterRow}>
-        {[
-          { id: 'all', label: 'Todos' },
-          { id: 'doctor', label: 'Médicos' },
-          { id: 'receptionist', label: 'Recepción' }
-        ].map(btn => (
+        {([
+          { id: 'all' as const, label: 'Todos' },
+          { id: 'doctor' as const, label: 'Médicos' },
+          { id: 'receptionist' as const, label: 'Recepción' }
+        ] as const).map(btn => (
           <TouchableOpacity 
             key={btn.id}
             style={[styles.filterBtn, filter === btn.id && styles.filterBtnActive]}
-            onPress={() => setFilter(btn.id as any)}
+            onPress={() => setFilter(btn.id)}
           >
             <Text style={[styles.filterBtnText, filter === btn.id && { color: 'white' }]}>{btn.label}</Text>
           </TouchableOpacity>
@@ -216,6 +219,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
     paddingHorizontal: Spacing.lg, paddingVertical: Spacing.xl,
   },
+  backBtn: { marginRight: 12, padding: 4 },
   headerTitle: { fontSize: 26, fontWeight: '800', color: Colors.primary },
   headerSubtitle: { fontSize: 13, color: Colors.textMuted, fontWeight: '600' },
   addBtn: { 

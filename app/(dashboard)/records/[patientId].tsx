@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, RefreshControl, Image, Modal, TextInput, Alert, Platform, KeyboardAvoidingView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -27,6 +27,8 @@ export default function PatientRecordScreen() {
   const [activeTab, setActiveTab] = useState<TabType>('evolucion');
   const [isNoteModalVisible, setIsNoteModalVisible] = useState(false);
   const [isHistoryModalVisible, setIsHistoryModalVisible] = useState(false);
+
+  const modalOpenedByParam = useRef(false);
 
   const [editedHistory, setEditedHistory] = useState({
     blood_type: '',
@@ -135,9 +137,10 @@ export default function PatientRecordScreen() {
   });
 
   useEffect(() => {
-    if (appointmentId) {
+    if (appointmentId && !modalOpenedByParam.current) {
       setIsNoteModalVisible(true);
       setActiveTab('evolucion');
+      modalOpenedByParam.current = true;
     }
   }, [appointmentId]);
 
@@ -197,7 +200,7 @@ export default function PatientRecordScreen() {
       if (targetId) {
         const { data: updatedData, error: updateError } = await supabase
           .from('appointments')
-          .update({ status: 'completed' as any })
+          .update({ status: 'completed' })
           .eq('id', targetId)
           .select();
           
@@ -225,21 +228,18 @@ export default function PatientRecordScreen() {
         return;
       }
 
-      const msg = data?.id ? `Cita ${data.id.slice(0,8)} finalizada correctamente.` : "Nota guardada (sin cita vinculada).";
+      const msg = data?.id ? "Cita finalizada correctamente." : "Nota guardada (sin cita vinculada).";
       Alert.alert('Éxito', msg, [
         { text: 'OK', onPress: () => {
           setIsNoteModalVisible(false);
           router.back(); 
         }}
       ]);
-      setIsNoteModalVisible(false);
       setNewNote({
         reason: '', physical_exam: '', blood_pressure: '', heart_rate: '',
         respiratory_rate: '', temperature: '', weight: '', height: '',
         diagnosis: '', treatment: '', prescription: '',
       });
-      // Clear appointmentId from URL to prevent accidental re-open
-      router.setParams({ appointmentId: '' });
     },
     onError: (err: any) => Alert.alert('Error', err.message),
   });

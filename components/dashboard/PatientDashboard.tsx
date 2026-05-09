@@ -58,9 +58,9 @@ export default function PatientDashboard() {
             <View style={styles.ticketRight}>
                <View style={styles.ticketHeader}>
                   <Text style={styles.ticketTime}>{format(new Date(apt.start_time), 'HH:mm')} hrs</Text>
-                  <View style={[styles.statusTag, { backgroundColor: apt.status === 'confirmed' ? '#dcfce7' : '#fef9c3' }]}>
-                    <Text style={[styles.statusTagText, { color: apt.status === 'confirmed' ? '#16a34a' : '#ca8a04' }]}>
-                      {apt.status === 'confirmed' ? 'Confirmada' : 'Programada'}
+                  <View style={[styles.statusTag, { backgroundColor: apt.status === 'arrived' ? '#eff6ff' : apt.status === 'confirmed' ? '#dcfce7' : '#fef9c3' }]}>
+                    <Text style={[styles.statusTagText, { color: apt.status === 'arrived' ? '#2563eb' : apt.status === 'confirmed' ? '#16a34a' : '#ca8a04' }]}>
+                      {apt.status === 'arrived' ? 'En Sala' : apt.status === 'confirmed' ? 'Confirmada' : 'Programada'}
                     </Text>
                   </View>
                </View>
