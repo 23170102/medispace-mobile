@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, Modal, TextInput, ActivityIndicator, Alert, RefreshControl, ScrollView, KeyboardAvoidingView, Platform, TouchableWithoutFeedback, Keyboard } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -34,6 +34,13 @@ export default function BentoBranchesScreen() {
       if (editingBranch) {
         const { error } = await supabase.from('branches').update(formData).eq('id', editingBranch.id);
         if (error) throw error;
+        if (editingBranch.status !== formData.status) {
+          const { error: officesError } = await supabase
+            .from('offices')
+            .update({ status: formData.status })
+            .eq('branch_id', editingBranch.id);
+          if (officesError) throw officesError;
+        }
       } else {
         const { error } = await supabase.from('branches').insert(formData);
         if (error) throw error;
@@ -69,7 +76,7 @@ export default function BentoBranchesScreen() {
     setEditingBranch(null);
   };
 
-  const renderBranch = ({ item, index }: { item: any, index: number }) => {
+  const renderBranch = useCallback(({ item, index }: { item: any, index: number }) => {
     const isMain = index === 0;
     return (
       <View style={[styles.branchCard, isMain && styles.mainBranchCard]}>
@@ -122,7 +129,7 @@ export default function BentoBranchesScreen() {
         </View>
       </View>
     );
-  };
+  }, []);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -148,6 +155,11 @@ export default function BentoBranchesScreen() {
           keyExtractor={item => item.id}
           contentContainerStyle={styles.list}
           refreshControl={<RefreshControl refreshing={isLoading} onRefresh={refetch} colors={[Colors.secondary]} />}
+          initialNumToRender={10}
+          maxToRenderPerBatch={5}
+          windowSize={5}
+          removeClippedSubviews={true}
+          showsVerticalScrollIndicator={false}
           ListEmptyComponent={
             <View style={styles.emptyState}>
               <Ionicons name="location-outline" size={64} color={Colors.textMuted} />

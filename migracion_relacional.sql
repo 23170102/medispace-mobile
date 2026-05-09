@@ -276,3 +276,10 @@ CREATE POLICY "Appointments are visible to owners and staff" ON public.appointme
         auth.uid() = doctor_id OR 
         (SELECT role FROM public.profiles WHERE id = auth.uid()) IN ('admin', 'receptionist')
     );
+
+CREATE POLICY "Appointments can be updated by owners and staff" ON public.appointments
+    FOR UPDATE USING (
+        auth.uid() = patient_id OR 
+        auth.uid() = doctor_id OR 
+        (SELECT role FROM public.profiles WHERE id = auth.uid()) IN ('admin', 'receptionist')
+    );

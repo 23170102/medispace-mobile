@@ -8,7 +8,7 @@ import { supabase } from '../../lib/supabase';
 import { Colors, Spacing, FontSizes, BorderRadius } from '../../constants/theme';
 
 const specialties = [
-  'Cardiología', 'Dermatología', 'Pediatría', 'Ginecología', 
+  'Medicina General', 'Cardiología', 'Dermatología', 'Pediatría', 'Ginecología', 
   'Neurología', 'Odontología', 'Oftalmología', 'Psiquiatría', 'Urología'
 ];
 

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput, ActivityIndicator, RefreshControl, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -11,7 +11,6 @@ import { Colors, Spacing } from '../../../constants/theme';
 export default function MedicalRecordsScreen() {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
-  const [filteredPatients, setFilteredPatients] = useState<any[]>([]);
 
   const { user, roles } = useAuth();
   const isDoctor = roles.includes('doctor');
@@ -59,14 +58,11 @@ export default function MedicalRecordsScreen() {
   });
 
 
-  useEffect(() => {
-    if (patients) {
-      setFilteredPatients(
-        patients.filter(p => 
-          `${p.first_name} ${p.last_name}`.toLowerCase().includes(searchQuery.toLowerCase())
-        )
-      );
-    }
+  const filteredPatients = useMemo(() => {
+    if (!patients) return [];
+    return patients.filter(p => 
+      `${p.first_name} ${p.last_name}`.toLowerCase().includes(searchQuery.toLowerCase())
+    );
   }, [searchQuery, patients]);
 
   if (!isDoctor && !isLoading) {
@@ -81,7 +77,7 @@ export default function MedicalRecordsScreen() {
     );
   }
 
-  const renderPatientCard = ({ item }: { item: any }) => (
+  const renderPatientCard = useCallback(({ item }: { item: any }) => (
     <TouchableOpacity 
       style={styles.patientCard}
       onPress={() => router.push(`/(dashboard)/records/${item.user_id}`)}
@@ -109,7 +105,7 @@ export default function MedicalRecordsScreen() {
         <Text style={styles.viewBtnText}>Ver Expediente</Text>
       </TouchableOpacity>
     </TouchableOpacity>
-  );
+  ), []);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -144,6 +140,11 @@ export default function MedicalRecordsScreen() {
           columnWrapperStyle={styles.columnWrapper}
           contentContainerStyle={styles.list}
           refreshControl={<RefreshControl refreshing={isLoading} onRefresh={refetch} colors={[Colors.secondary]} />}
+          initialNumToRender={8}
+          maxToRenderPerBatch={6}
+          windowSize={5}
+          removeClippedSubviews={true}
+          showsVerticalScrollIndicator={false}
           ListEmptyComponent={
             <View style={styles.emptyState}>
               <Ionicons name="people-outline" size={64} color={Colors.textMuted} />

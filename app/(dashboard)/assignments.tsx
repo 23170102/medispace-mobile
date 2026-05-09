@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, Modal, ActivityIndicator, Alert, ScrollView, RefreshControl, Platform, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -24,6 +24,8 @@ export default function GlobalAssignmentsScreen() {
 
    const [fee, setFee] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+  const [doctorSearch, setDoctorSearch] = useState('');
+  const [selectedHours, setSelectedHours] = useState<number[]>([]);
 
   // 0. Manage Fee (Doctors only)
   useEffect(() => {
@@ -88,6 +90,14 @@ export default function GlobalAssignmentsScreen() {
     },
   });
 
+  const filteredDoctors = useMemo(() => {
+    if (!doctorSearch.trim()) return doctors;
+    const q = doctorSearch.toLowerCase();
+    return doctors?.filter(d =>
+      `${d.first_name} ${d.last_name}`.toLowerCase().includes(q)
+    ) || [];
+  }, [doctors, doctorSearch]);
+
   // 2. Fetch all offices (Admins only)
   const { data: offices } = useQuery({
     queryKey: ['admin-offices-all'],
@@ -97,12 +107,9 @@ export default function GlobalAssignmentsScreen() {
       const { data, error } = await supabase
         .from('offices')
         .select('*, branches(name, status)')
-        .eq('status', 'active')
         .order('name');
       if (error) throw error;
-      
-      // Filter out offices from suspended branches
-      return (data || []).filter((off: any) => off.branches?.status === 'active');
+      return data || [];
     },
   });
 
@@ -154,9 +161,10 @@ export default function GlobalAssignmentsScreen() {
   const createAssignmentMutation = useMutation({
     mutationFn: async () => {
       if (!selectedDoctorId || !selectedOfficeId || selectedDays.length === 0) return;
-      
-      const newStart = format(startTime, 'HH:mm:ss');
-      const newEnd = format(endTime, 'HH:mm:ss');
+      if (modality === 'hourly' && selectedHours.length === 0) return;
+
+      const newStart = modality === 'daily' ? format(startTime, 'HH:mm:ss') : '';
+      const newEnd = modality === 'daily' ? format(endTime, 'HH:mm:ss') : '';
 
       // 1. Fetch ALL existing assignments to check for conflicts
       const { data: existing, error: fetchError } = await supabase
@@ -171,27 +179,28 @@ export default function GlobalAssignmentsScreen() {
       if (fetchError) throw fetchError;
 
       // 2. Validate conflicts
+      const slotRanges = modality === 'hourly'
+        ? selectedHours.map(h => ({ start: `${h}:00:00`, end: `${h + 1}:00:00` }))
+        : [{ start: newStart, end: newEnd }];
+
       for (const day of selectedDays) {
-        const dayConflicts = existing?.filter(ex => ex.day_of_week === day);
+        const dayConflicts = existing?.filter(ex => ex.day_of_week === day) || [];
         
-        for (const ex of (dayConflicts || [])) {
-          const overlap = 
-            (newStart < ex.end_time && newEnd > ex.start_time);
-          
-          if (overlap) {
-            // Normalize profile access
+        for (const slot of slotRanges) {
+          for (const ex of dayConflicts) {
+            const overlap = (slot.start < ex.end_time && slot.end > ex.start_time);
+            if (!overlap) continue;
+
             const profileData = Array.isArray(ex.profiles) ? ex.profiles[0] : ex.profiles;
             const docName = profileData ? `Dr. ${profileData.first_name} ${profileData.last_name}` : 'el médico';
 
-            // Check Doctor Conflict
             if (ex.doctor_id === selectedDoctorId) {
               const dayName = daysList[day];
               throw new Error(
                 `Conflicto de Horario: El ${docName} ya tiene una asignación el ${dayName} de ${ex.start_time.slice(0, 5)} a ${ex.end_time.slice(0, 5)} en ${ex.offices?.name}.`
               );
             }
-            
-            // Check Office Conflict
+
             if (ex.office_id === selectedOfficeId) {
               const dayName = daysList[day];
               throw new Error(
@@ -202,14 +211,16 @@ export default function GlobalAssignmentsScreen() {
         }
       }
 
-      const inserts = selectedDays.map(day => ({
-        doctor_id: selectedDoctorId,
-        office_id: selectedOfficeId,
-        day_of_week: day,
-        start_time: newStart,
-        end_time: newEnd,
-        modality: modality,
-      }));
+      const inserts = selectedDays.flatMap(day =>
+        slotRanges.map(slot => ({
+          doctor_id: selectedDoctorId,
+          office_id: selectedOfficeId,
+          day_of_week: day,
+          start_time: slot.start,
+          end_time: slot.end,
+          modality: modality,
+        }))
+      );
       
       const { error } = await supabase.from('doctor_assignments').insert(inserts);
       if (error) throw error;
@@ -238,6 +249,8 @@ export default function GlobalAssignmentsScreen() {
     setSelectedDoctorId(null);
     setSelectedOfficeId(null);
     setSelectedDays([]);
+    setSelectedHours([]);
+    setDoctorSearch('');
   };
 
   const toggleDay = (index: number) => {
@@ -246,7 +259,7 @@ export default function GlobalAssignmentsScreen() {
     );
   };
 
-  const renderDoctorGroup = ({ item }: { item: any }) => (
+  const renderDoctorGroup = useCallback(({ item }: { item: any }) => (
     <View style={styles.doctorGroupCard}>
       <View style={styles.doctorHeader}>
         <Text style={styles.doctorName}>{item.name}</Text>
@@ -263,14 +276,12 @@ export default function GlobalAssignmentsScreen() {
                   <Ionicons name="business" size={14} color={Colors.primary} style={{ marginRight: 4 }} />
                   <Text style={styles.branchText}>{schedule.offices?.branches?.name}</Text>
                 </View>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Text style={styles.officeText}>{schedule.offices?.name}</Text>
-                  {isSuspended && (
-                    <View style={styles.suspendedBadge}>
-                      <Text style={styles.suspendedText}>SUSPENDIDO</Text>
-                    </View>
-                  )}
-                </View>
+                <Text style={styles.officeText}>{schedule.offices?.name}</Text>
+                {isSuspended && (
+                  <View style={styles.suspendedBadge}>
+                    <Text style={styles.suspendedText}>SUSPENDIDO</Text>
+                  </View>
+                )}
               </View>
 
               <View style={styles.timeInfo}>
@@ -309,9 +320,9 @@ export default function GlobalAssignmentsScreen() {
         })}
       </View>
     </View>
-  );
+  ), [isDoctor, deleteAssignmentMutation]);
 
-  const filteredAssignments = assignments?.filter(group => {
+  const filteredAssignments = useMemo(() => assignments?.filter(group => {
     if (!searchQuery) return true;
     const q = searchQuery.toLowerCase();
     const docMatch = group.name.toLowerCase().includes(q);
@@ -320,7 +331,7 @@ export default function GlobalAssignmentsScreen() {
       s.offices?.name.toLowerCase().includes(q)
     );
     return docMatch || branchMatch;
-  }) || [];
+  }) || [], [assignments, searchQuery]);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -399,6 +410,11 @@ export default function GlobalAssignmentsScreen() {
           keyExtractor={item => item.id}
           contentContainerStyle={styles.list}
           refreshControl={<RefreshControl refreshing={isLoading} onRefresh={refetch} colors={[Colors.secondary]} />}
+          initialNumToRender={5}
+          maxToRenderPerBatch={5}
+          windowSize={5}
+          removeClippedSubviews={true}
+          showsVerticalScrollIndicator={false}
           ListEmptyComponent={
             <View style={styles.emptyState}>
               <Ionicons name="calendar-outline" size={64} color={Colors.textMuted} />
@@ -421,15 +437,32 @@ export default function GlobalAssignmentsScreen() {
 
               <ScrollView bounces={false} style={styles.formContainer} showsVerticalScrollIndicator={false}>
                 <Text style={styles.label}>Médico</Text>
+                <View style={styles.doctorSearchContainer}>
+                  <Ionicons name="search" size={16} color={Colors.textMuted} />
+                  <TextInput
+                    style={styles.doctorSearchInput}
+                    value={doctorSearch}
+                    onChangeText={setDoctorSearch}
+                    placeholder="Buscar por nombre..."
+                    placeholderTextColor={Colors.textMuted}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                  {doctorSearch.length > 0 && (
+                    <TouchableOpacity onPress={() => setDoctorSearch('')}>
+                      <Ionicons name="close-circle" size={16} color={Colors.textMuted} />
+                    </TouchableOpacity>
+                  )}
+                </View>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.scrollPicker}>
-                  {doctors?.map(doc => (
+                  {filteredDoctors?.map(doc => (
                     <TouchableOpacity 
                       key={doc.user_id} 
                       style={[styles.chip, selectedDoctorId === doc.user_id && styles.chipActive]}
                       onPress={() => setSelectedDoctorId(doc.user_id)}
                     >
                       <Text style={[styles.chipText, selectedDoctorId === doc.user_id && styles.chipTextActive]}>
-                        Dr. {doc.first_name}
+                        Dr. {doc.first_name} {doc.last_name}
                       </Text>
                     </TouchableOpacity>
                   ))}
@@ -440,11 +473,23 @@ export default function GlobalAssignmentsScreen() {
                   {offices?.map((off: any) => (
                     <TouchableOpacity 
                       key={off.id} 
-                      style={[styles.chip, selectedOfficeId === off.id && styles.chipActive]}
-                      onPress={() => setSelectedOfficeId(off.id)}
+                      style={[styles.chip, selectedOfficeId === off.id && styles.chipActive, (off.status !== 'active' || off.branches?.status !== 'active') && styles.chipSuspended]}
+                      onPress={() => {
+                        const isSuspended = off.status !== 'active' || off.branches?.status !== 'active';
+                        if (isSuspended) {
+                          Alert.alert(
+                            'Consultorio suspendido',
+                            'Este consultorio está suspendido. Los horarios asignados no estarán disponibles hasta que se reactive.',
+                            [{ text: 'Entendido, asignar de todas formas', style: 'destructive', onPress: () => setSelectedOfficeId(off.id) },
+                             { text: 'Cancelar', style: 'cancel' }]
+                          );
+                          return;
+                        }
+                        setSelectedOfficeId(off.id);
+                      }}
                     >
                       <Text style={[styles.chipText, selectedOfficeId === off.id && styles.chipTextActive]}>
-                        {off.name} ({off.branches?.name})
+                        {off.name} ({off.branches?.name}){off.status !== 'active' ? ' ⚠️' : ''}
                       </Text>
                     </TouchableOpacity>
                   ))}
@@ -469,7 +514,7 @@ export default function GlobalAssignmentsScreen() {
                     style={[styles.modalityBtn, modality === 'hourly' && styles.modalityBtnActive]}
                     onPress={() => {
                       setModality('hourly');
-                      // Reset to a standard slot for hourly
+                      setSelectedHours([]);
                       setStartTime(new Date(new Date().setHours(9, 0, 0, 0)));
                       setEndTime(new Date(new Date().setHours(14, 0, 0, 0)));
                     }}
@@ -481,7 +526,7 @@ export default function GlobalAssignmentsScreen() {
                     style={[styles.modalityBtn, modality === 'daily' && styles.modalityBtnActive]}
                     onPress={() => {
                       setModality('daily');
-                      // Set default full day for daily
+                      setSelectedHours([]);
                       setStartTime(new Date(new Date().setHours(8, 0, 0, 0)));
                       setEndTime(new Date(new Date().setHours(20, 0, 0, 0)));
                     }}
@@ -491,26 +536,54 @@ export default function GlobalAssignmentsScreen() {
                   </TouchableOpacity>
                 </View>
 
-                <View style={styles.row}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.label}>Hora Inicio</Text>
-                    <TouchableOpacity style={styles.timeInput} onPress={() => setShowTimePicker('start')}>
-                      <Text style={styles.timeLabel}>{format(startTime, 'HH:mm')}</Text>
-                    </TouchableOpacity>
+                {modality === 'daily' ? (
+                  <View style={styles.row}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.label}>Hora Inicio</Text>
+                      <TouchableOpacity style={styles.timeInput} onPress={() => setShowTimePicker('start')}>
+                        <Text style={styles.timeLabel}>{format(startTime, 'HH:mm')}</Text>
+                      </TouchableOpacity>
+                    </View>
+                    <View style={{ width: 15 }} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.label}>Hora Fin</Text>
+                      <TouchableOpacity style={styles.timeInput} onPress={() => setShowTimePicker('end')}>
+                        <Text style={styles.timeLabel}>{format(endTime, 'HH:mm')}</Text>
+                      </TouchableOpacity>
+                    </View>
                   </View>
-                  <View style={{ width: 15 }} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.label}>Hora Fin</Text>
-                    <TouchableOpacity style={styles.timeInput} onPress={() => setShowTimePicker('end')}>
-                      <Text style={styles.timeLabel}>{format(endTime, 'HH:mm')}</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
+                ) : (
+                  <>
+                    <Text style={styles.label}>Selecciona las horas de trabajo</Text>
+                    <View style={styles.hourGrid}>
+                      {Array.from({ length: 15 }, (_, i) => i + 6).map(hour => {
+                        const active = selectedHours.includes(hour);
+                        return (
+                          <TouchableOpacity
+                            key={hour}
+                            style={[styles.hourSlot, active && styles.hourSlotActive]}
+                            onPress={() => {
+                              setSelectedHours(prev =>
+                                prev.includes(hour)
+                                  ? prev.filter(h => h !== hour)
+                                  : [...prev, hour].sort()
+                              );
+                            }}
+                          >
+                            <Text style={[styles.hourSlotText, active && styles.hourSlotTextActive]}>
+                              {`${String(hour).padStart(2, '0')}:00`}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  </>
+                )}
 
                 <TouchableOpacity 
-                  style={[styles.confirmBtn, (!selectedDoctorId || !selectedOfficeId || selectedDays.length === 0) && styles.disabledBtn]} 
+                  style={[styles.confirmBtn, (!selectedDoctorId || !selectedOfficeId || selectedDays.length === 0 || (modality === 'hourly' && selectedHours.length === 0)) && styles.disabledBtn]} 
                   onPress={() => createAssignmentMutation.mutate()}
-                  disabled={!selectedDoctorId || !selectedOfficeId || selectedDays.length === 0 || createAssignmentMutation.isPending}
+                  disabled={!selectedDoctorId || !selectedOfficeId || selectedDays.length === 0 || (modality === 'hourly' && selectedHours.length === 0) || createAssignmentMutation.isPending}
                 >
                   {createAssignmentMutation.isPending ? <ActivityIndicator color="white" /> : <Text style={styles.confirmBtnText}>Confirmar Asignación</Text>}
                 </TouchableOpacity>
@@ -589,12 +662,32 @@ const styles = StyleSheet.create({
   suspendedBadge: {
     backgroundColor: '#fff1f2', paddingHorizontal: 6, paddingVertical: 2,
     borderRadius: 4, borderWidth: 1, borderColor: '#fda4af',
+    alignSelf: 'flex-start', marginTop: 4,
   },
   suspendedText: { color: Colors.error, fontSize: 8, fontWeight: '900' },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   emptyState: { alignItems: 'center', marginTop: 100 },
   emptyText: { color: Colors.textMuted, marginTop: 10, fontWeight: '600' },
   
+  // Doctor Search
+  doctorSearchContainer: {
+    flexDirection: 'row', alignItems: 'center', backgroundColor: '#f1f5f9',
+    borderRadius: 12, paddingHorizontal: 12, height: 40, gap: 8,
+    marginBottom: 10,
+  },
+  doctorSearchInput: { flex: 1, fontSize: 14, fontWeight: '600', color: Colors.primary, paddingVertical: 0 },
+
+  // Hour Grid
+  hourGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: Spacing.md },
+  hourSlot: {
+    width: 64, paddingVertical: 10, borderRadius: 12,
+    backgroundColor: '#f1f5f9', borderWidth: 1, borderColor: '#e2e8f0',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  hourSlotActive: { backgroundColor: '#1e3a8a', borderColor: '#1e3a8a' },
+  hourSlotText: { fontSize: 12, fontWeight: '700', color: '#475569' },
+  hourSlotTextActive: { color: 'white' },
+
   // Modal Styles
   modalBg: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   modalContent: { 
@@ -611,6 +704,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#f1f5f9', marginRight: 10, borderWidth: 1, borderColor: '#e2e8f0',
   },
   chipActive: { backgroundColor: '#1e3a8a', borderColor: '#1e3a8a', shadowColor: '#1e3a8a', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8, elevation: 4 },
+  chipSuspended: { opacity: 0.6, borderColor: '#fda4af', borderStyle: 'dashed' },
   chipText: { fontSize: 14, fontWeight: '700', color: '#475569' },
   chipTextActive: { color: 'white' },
   daysGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: Spacing.md },

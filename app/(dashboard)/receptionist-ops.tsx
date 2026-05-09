@@ -21,12 +21,32 @@ export default function ReceptionistOpsScreen() {
   const [showQuickReg, setShowQuickReg] = useState(false);
   const [newPatient, setNewPatient] = useState({ first_name: '', last_name: '', phone: '' });
 
+  const validatePatient = (): string | null => {
+    if (!newPatient.first_name || !newPatient.last_name || !newPatient.phone) {
+      return 'Todos los campos son obligatorios';
+    }
+    const nameRegex = /^[a-zA-ZáéíóúüñÁÉÍÓÚÜÑ\s]{2,50}$/;
+    if (!nameRegex.test(newPatient.first_name)) {
+      return 'El nombre solo puede contener letras (mín. 2)';
+    }
+    if (!nameRegex.test(newPatient.last_name)) {
+      return 'El apellido solo puede contener letras (mín. 2)';
+    }
+    const phoneClean = newPatient.phone.replace(/\s/g, '');
+    if (!/^\d{10}$/.test(phoneClean)) {
+      return 'El teléfono debe tener exactamente 10 dígitos';
+    }
+    return null;
+  };
+
   const quickRegisterMutation = useMutation({
     mutationFn: async () => {
-      if (!newPatient.first_name || !newPatient.last_name || !newPatient.phone) {
-        throw new Error('Todos los campos son obligatorios');
+      const validationError = validatePatient();
+      if (validationError) {
+        throw new Error(validationError);
       }
-      const email = `${newPatient.phone.replace(/\s/g, '')}@medispace.tmp`;
+      const phoneClean = newPatient.phone.replace(/\s/g, '');
+      const email = `${phoneClean}@medispace.tmp`;
       const password = 'Paciente123!';
       const { data, error } = await secondarySupabase.auth.signUp({
         email,
@@ -35,7 +55,7 @@ export default function ReceptionistOpsScreen() {
           data: {
             first_name: newPatient.first_name,
             last_name: newPatient.last_name,
-            phone: newPatient.phone,
+            phone: phoneClean,
             role: 'patient'
           }
         }

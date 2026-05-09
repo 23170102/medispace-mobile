@@ -79,7 +79,7 @@ export function useUpcomingAppointments(role: 'doctor' | 'patient' | 'receptioni
         .from('appointments')
         .select('*')
         .gte('start_time', today)
-        .in('status', ['scheduled', 'confirmed'])
+        .in('status', ['scheduled', 'confirmed', 'arrived'])
         .order('start_time', { ascending: true })
         .limit(10);
 

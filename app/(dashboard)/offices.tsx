@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, Modal, TextInput, ActivityIndicator, Alert, RefreshControl, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -100,7 +100,7 @@ export default function GlobalOfficesScreen() {
     setStatus('active');
   };
 
-  const renderOffice = ({ item }: { item: any }) => {
+  const renderOffice = useCallback(({ item }: { item: any }) => {
     const isActive = item.status === 'active';
     return (
       <View style={[styles.card, !isActive && styles.cardInactive]}>
@@ -138,7 +138,7 @@ export default function GlobalOfficesScreen() {
         </View>
       </View>
     );
-  };
+  }, []);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -183,6 +183,11 @@ export default function GlobalOfficesScreen() {
           keyExtractor={item => item.id}
           contentContainerStyle={styles.list}
           refreshControl={<RefreshControl refreshing={isLoading} onRefresh={refetch} colors={[Colors.secondary]} />}
+          initialNumToRender={10}
+          maxToRenderPerBatch={8}
+          windowSize={5}
+          removeClippedSubviews={true}
+          showsVerticalScrollIndicator={false}
           ListEmptyComponent={
             <View style={styles.emptyState}>
               <Ionicons name="home-outline" size={64} color={Colors.textMuted} />
@@ -231,7 +236,18 @@ export default function GlobalOfficesScreen() {
               <View style={styles.statusRow}>
                 <TouchableOpacity 
                   style={[styles.statusOption, status === 'active' && styles.statusOptionActive]}
-                  onPress={() => setStatus('active')}
+                  onPress={() => {
+                    const branch = branches?.find(b => b.id === selectedBranchId);
+                    if (branch?.status === 'suspended') {
+                      Alert.alert(
+                        'Sucursal suspendida',
+                        'No puedes activar este consultorio porque la sucursal está suspendida. Activa la sucursal primero.',
+                        [{ text: 'Entendido' }]
+                      );
+                      return;
+                    }
+                    setStatus('active');
+                  }}
                 >
                   <Text style={[styles.statusOptionText, status === 'active' && { color: 'white' }]}>Activo</Text>
                 </TouchableOpacity>

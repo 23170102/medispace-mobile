@@ -49,7 +49,7 @@ export default function DashboardLayout() {
         options={{
           title: 'Agendar',
           tabBarIcon: ({ color, size }) => <Ionicons name="people" size={size} color={color} />,
-          href: primaryRole === 'patient' ? '/(dashboard)/catalog' : null,
+          href: primaryRole === 'patient' || primaryRole === 'receptionist' ? '/(dashboard)/catalog' : null,
         }}
       />
       <Tabs.Screen

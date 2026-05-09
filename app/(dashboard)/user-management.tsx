@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Alert, RefreshControl, Image } from 'react-native';
+import { useState, useCallback, useMemo, memo } from 'react';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Alert, RefreshControl, Image, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -13,6 +13,7 @@ export default function BentoUserManagementScreen() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [filter, setFilter] = useState<'all' | 'doctor' | 'receptionist'>('all');
+  const [searchQuery, setSearchQuery] = useState('');
 
   const { data: users, isLoading, refetch } = useQuery({
     queryKey: ['admin-staff-users-bento'],
@@ -53,9 +54,17 @@ export default function BentoUserManagementScreen() {
     onError: (err: any) => Alert.alert('Error', err.message),
   });
 
-  const filteredUsers = users?.filter(u => filter === 'all' || u.roles.includes(filter)) || [];
+  const filteredUsers = useMemo(() => {
+    const q = searchQuery.toLowerCase().trim();
+    return (users || []).filter(u => {
+      if (!q) return filter === 'all' || u.roles.includes(filter);
+      const fullName = `${u.first_name} ${u.last_name}`.toLowerCase();
+      const phone = (u.phone || '').toLowerCase();
+      return (fullName.includes(q) || phone.includes(q)) && (filter === 'all' || u.roles.includes(filter));
+    });
+  }, [users, filter, searchQuery]);
 
-  const renderUser = ({ item }: { item: any }) => {
+  const renderUser = useCallback(({ item }: { item: any }) => {
     const isActive = item.is_active !== false;
     
     return (
@@ -124,7 +133,7 @@ export default function BentoUserManagementScreen() {
         </View>
       </View>
     );
-  };
+  }, [user?.id, toggleActiveMutation]);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -137,6 +146,24 @@ export default function BentoUserManagementScreen() {
           <Ionicons name="person-add" size={20} color="white" />
           <Text style={styles.addBtnText}>Nuevo</Text>
         </TouchableOpacity>
+      </View>
+
+      <View style={styles.searchContainer}>
+        <Ionicons name="search" size={18} color={Colors.textMuted} style={styles.searchIcon} />
+        <TextInput
+          style={styles.searchInput}
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          placeholder="Buscar por nombre o teléfono..."
+          placeholderTextColor={Colors.textMuted}
+          autoCapitalize="none"
+          autoCorrect={false}
+        />
+        {searchQuery.length > 0 && (
+          <TouchableOpacity onPress={() => setSearchQuery('')}>
+            <Ionicons name="close-circle" size={18} color={Colors.textMuted} />
+          </TouchableOpacity>
+        )}
       </View>
 
       <View style={styles.filterRow}>
@@ -166,6 +193,11 @@ export default function BentoUserManagementScreen() {
           keyExtractor={item => item.user_id}
           contentContainerStyle={styles.list}
           refreshControl={<RefreshControl refreshing={isLoading} onRefresh={refetch} colors={[Colors.secondary]} />}
+          initialNumToRender={10}
+          maxToRenderPerBatch={5}
+          windowSize={5}
+          removeClippedSubviews={true}
+          showsVerticalScrollIndicator={false}
           ListEmptyComponent={
             <View style={styles.emptyState}>
               <Ionicons name="people-outline" size={64} color={Colors.textMuted} />
@@ -191,6 +223,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12,
   },
   addBtnText: { color: 'white', fontWeight: '800', fontSize: 13 },
+  searchContainer: {
+    flexDirection: 'row', alignItems: 'center', backgroundColor: 'white',
+    marginHorizontal: Spacing.lg, marginBottom: Spacing.md,
+    borderRadius: 16, paddingHorizontal: 14, borderWidth: 1, borderColor: '#e2e8f0',
+  },
+  searchIcon: { marginRight: 8 },
+  searchInput: { flex: 1, paddingVertical: 12, fontSize: 14, color: Colors.text },
   filterRow: { flexDirection: 'row', paddingHorizontal: Spacing.lg, gap: 10, marginBottom: Spacing.md },
   filterBtn: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 10, backgroundColor: 'white', borderWidth: 1, borderColor: '#e2e8f0' },
   filterBtnActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },

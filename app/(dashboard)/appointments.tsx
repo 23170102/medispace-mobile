@@ -156,7 +156,7 @@ export default function AppointmentsScreen() {
         .from('appointments')
         .update({ 
           status: 'cancelled' as any,
-          notes: notes || 'Cancelada por el paciente'
+          notes: notes || (isStaff ? 'Cancelada por recepcionista' : 'Cancelada por el paciente')
         })
         .eq('id', appointmentId);
       if (error) throw error;
@@ -179,11 +179,14 @@ export default function AppointmentsScreen() {
 
   const handleCancel = (apt: any) => {
     const refundable = isRefundable(apt.start_time);
+    const patientName = apt.patient_profile ? `${apt.patient_profile.first_name} ${apt.patient_profile.last_name}` : 'del paciente';
     
     if (refundable) {
       Alert.alert(
         '¿Confirmar cancelación?',
-        'Faltan más de 24 horas. Se procesará tu reembolso completo automáticamente.',
+        isStaff
+          ? `Faltan más de 24 horas. Se procesará el reembolso completo de ${patientName} automáticamente.`
+          : 'Faltan más de 24 horas. Se procesará tu reembolso completo automáticamente.',
         [
           { text: 'No, mantener cita', style: 'cancel' },
           { 
@@ -199,7 +202,9 @@ export default function AppointmentsScreen() {
     } else {
       Alert.alert(
         '⚠️ Aviso de Políticas',
-        'Faltan menos de 24 horas para tu cita. Se retendrá el 50% del costo total por políticas de cancelación. Si pagaste el 100%, se te reembolsará la mitad restante. ¿Deseas continuar?',
+        isStaff
+          ? `Faltan menos de 24 horas para la cita de ${patientName}. Se retendrá el 50% del costo total por políticas de cancelación. ¿Deseas continuar?`
+          : 'Faltan menos de 24 horas para tu cita. Se retendrá el 50% del costo total por políticas de cancelación. Si pagaste el 100%, se te reembolsará la mitad restante. ¿Deseas continuar?',
         [
           { text: 'No, mantener cita', style: 'cancel' },
           { 
@@ -288,7 +293,7 @@ export default function AppointmentsScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.secondary]} />
         }
       >
-        <Text style={styles.title}>Mis Citas</Text>
+        <Text style={styles.title}>{isStaff ? 'Citas' : 'Mis Citas'}</Text>
 
         {isLoading ? (
           <ActivityIndicator size="large" color={Colors.secondary} style={{ marginTop: Spacing.xxl }} />
@@ -299,7 +304,7 @@ export default function AppointmentsScreen() {
             {upcoming.length === 0 ? (
               <View style={styles.emptyState}>
                 <Ionicons name="calendar-outline" size={40} color={Colors.textMuted} />
-                <Text style={styles.emptyText}>No tienes citas pendientes</Text>
+                <Text style={styles.emptyText}>{isStaff ? 'No hay citas pendientes' : 'No tienes citas pendientes'}</Text>
               </View>
             ) : (
               upcoming.map((apt: any) => {
@@ -402,9 +407,30 @@ export default function AppointmentsScreen() {
                         </View>
                       </View>
                       <Text style={styles.cardDoctor}>
-                        {isDoctor ? 'Paciente: ' : 'Dr. '}
-                        {apt.profiles?.first_name} {apt.profiles?.last_name}
+                        {isStaff ? `Paciente: ${apt.patient_profile?.first_name} ${apt.patient_profile?.last_name}` : (
+                          isDoctor ? 'Paciente: ' : 'Dr. '
+                        )}
+                        {!isStaff && `${apt.profiles?.first_name} ${apt.profiles?.last_name}`}
                       </Text>
+                      {isStaff && (
+                        <>
+                          <View style={styles.patientInfo}>
+                            <Ionicons name="call-outline" size={12} color={Colors.textSecondary} />
+                            <Text style={styles.cardSpecialty}>{apt.patient_profile?.phone || 'Sin teléfono'}</Text>
+                          </View>
+                          <Text style={[styles.cardSpecialty, { marginBottom: 4, color: Colors.secondary, fontWeight: '700' }]}>
+                            Atiende: Dr. {apt.doctor_profile?.first_name} {apt.doctor_profile?.last_name}
+                          </Text>
+                          {apt.offices && (
+                            <View style={styles.locationContainer}>
+                              <Ionicons name="location-outline" size={14} color={Colors.secondary} />
+                              <Text style={styles.locationText}>
+                                {apt.offices.branches?.name} · {apt.offices.name}
+                              </Text>
+                            </View>
+                          )}
+                        </>
+                      )}
                       <View style={styles.cardActions}>
                         {apt.status === 'cancelled' && (isDoctor || roles.includes('receptionist')) && (
                           <TouchableOpacity 
@@ -415,14 +441,14 @@ export default function AppointmentsScreen() {
                             <Text style={styles.rollbackText}>Reactivar</Text>
                           </TouchableOpacity>
                         )}
-                        {!isDoctor && apt.status === 'completed' && !apt.userRating && (
+                        {!isDoctor && !isStaff && apt.status === 'completed' && !apt.userRating && (
                           <TouchableOpacity style={styles.rateBtn} onPress={() => openRatingModal(apt)}>
                             <Ionicons name="star" size={14} color={Colors.secondary} />
                             <Text style={styles.rateBtnText}>Dejar Opinión</Text>
                           </TouchableOpacity>
                         )}
                       </View>
-                      {!isDoctor && apt.userRating && (
+                      {!isDoctor && !isStaff && apt.userRating && (
                         <View style={styles.ratedBadge}>
                           <Text style={styles.ratedText}>Ya calificada ({apt.userRating.score}★)</Text>
                         </View>

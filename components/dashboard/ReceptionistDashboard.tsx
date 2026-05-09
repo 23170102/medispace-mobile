@@ -33,11 +33,7 @@ export default function ReceptionistDashboard() {
           <Text style={styles.statVal}>Agendar</Text>
           <Text style={styles.statLab}>Nueva Cita</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.statCard} onPress={() => router.push('/(dashboard)/records')}>
-          <Ionicons name="people" size={24} color="#6366f1" />
-          <Text style={styles.statVal}>Pacientes</Text>
-          <Text style={styles.statLab}>Expedientes</Text>
-        </TouchableOpacity>
+
       </View>
 
       <View style={styles.sectionHeader}>
