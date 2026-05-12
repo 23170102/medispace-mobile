@@ -52,11 +52,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const clearAuth = () => {
+  const clearAuth = async (shouldSignOutSDK = true) => {
     setUser(null);
     setSession(null);
     setRoles([]);
     setProfile(null);
+    
+    if (shouldSignOutSDK) {
+      try {
+        await supabase.auth.signOut({ scope: 'local' });
+      } catch (e) {
+        // Ignorar errores en el cierre local
+      }
+    }
   };
 
   const fetchUserData = async (userId: string) => {
@@ -68,10 +76,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .eq('id', userId)
         .single();
         
-      if (userError && userError.code !== 'PGRST116') {
-        console.error('Error fetching user base data:', userError);
+      if (userError) {
+        if (userError.message?.includes('Refresh Token') || userError.message?.includes('invalid_grant')) {
+          console.log('Auth error during fetchUserData, signing out...');
+          clearAuth();
+          return;
+        }
+        if (userError.code !== 'PGRST116') {
+          console.error('Error fetching user base data:', userError);
+        }
       }
-
+      
+      // ... rest of the function remains same but I should probably include it for completeness if I'm replacing the whole block
       const role = userData?.role as AppRole || 'patient';
       setRoles([role]);
 
@@ -136,8 +152,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       setProfile(combinedProfile);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Unexpected error in fetchUserData:', error);
+      if (error.message?.includes('Refresh Token')) {
+        clearAuth();
+      }
     }
   };
 
@@ -158,9 +177,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setSession(initialSession);
           setUser(initialSession.user);
           await fetchUserData(initialSession.user.id);
+        } else {
+          // No session found, ensure local state is clear
+          clearAuth();
         }
-      } catch (err) {
-        console.error('Auth init error:', err);
+      } catch (err: any) {
+        console.error('Auth init error:', err.message || err);
+        clearAuth();
       } finally {
         setLoading(false);
       }
@@ -171,18 +194,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, currentSession) => {
       console.log('Auth Event:', event);
 
-      if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
-        setSession(currentSession);
-        setUser(currentSession?.user ?? null);
-        if (currentSession?.user) {
+      if (event === 'SIGNED_IN' || event === 'USER_UPDATED' || event === 'TOKEN_REFRESHED') {
+        if (currentSession) {
+          setSession(currentSession);
+          setUser(currentSession.user);
           await fetchUserData(currentSession.user.id);
+        } else {
+          clearAuth(false);
         }
       } else if (event === 'SIGNED_OUT') {
-        clearAuth();
-      } else if (currentSession) {
-        // Otros eventos con sesión activa
-        setSession(currentSession);
-        setUser(currentSession.user);
+        clearAuth(false);
+      } else if (!currentSession && (event as any) === 'INITIAL_SESSION') {
+        clearAuth(false);
       }
 
       setLoading(false);

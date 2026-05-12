@@ -21,18 +21,18 @@ const storageAdapter = {
       if (typeof window !== 'undefined') {
         window.localStorage.setItem(key, value);
       }
-      return;
+      return Promise.resolve();
     }
-    SecureStore.setItemAsync(key, value);
+    return SecureStore.setItemAsync(key, value);
   },
   removeItem: (key: string) => {
     if (isWeb) {
       if (typeof window !== 'undefined') {
         window.localStorage.removeItem(key);
       }
-      return;
+      return Promise.resolve();
     }
-    SecureStore.deleteItemAsync(key);
+    return SecureStore.deleteItemAsync(key);
   },
 };
 
