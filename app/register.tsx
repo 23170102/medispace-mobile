@@ -4,9 +4,10 @@ import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { format } from 'date-fns';
-import DateTimePicker from '@react-native-community/datetimepicker';
+import DateTimePickerModal from 'react-native-modal-datetime-picker';
 import Toast from 'react-native-toast-message';
 import { supabase } from '../lib/supabase';
+import { validatePhone, formatPhone, cleanPhone, translateSupabaseError } from '../lib/validation';
 import { Colors, Spacing, FontSizes, BorderRadius } from '../constants/theme';
 
 export default function RegisterScreen() {
@@ -50,6 +51,10 @@ export default function RegisterScreen() {
       Toast.show({ type: 'error', text1: 'Error', text2: 'Las contraseñas no coinciden' });
       return;
     }
+    if (phone && !validatePhone(phone)) {
+      Toast.show({ type: 'error', text1: 'Teléfono inválido', text2: 'Ingresa un número de 10 dígitos' });
+      return;
+    }
 
     setLoading(true);
     try {
@@ -71,18 +76,35 @@ export default function RegisterScreen() {
       Toast.show({ type: 'success', text1: '¡Cuenta creada!', text2: 'Revisa tu correo para confirmar' });
       router.replace('/login');
     } catch (error: any) {
-      Toast.show({ type: 'error', text1: 'Error al registrar', text2: error.message });
+      Toast.show({ type: 'error', text1: 'Error al registrar', text2: translateSupabaseError(error.message) });
     } finally {
       setLoading(false);
     }
   };
 
-  const onDateChange = (event: any, selectedDate?: Date) => {
+  const handleConfirmDate = (selectedDate: Date) => {
     setShowDatePicker(false);
-    if (selectedDate) {
-      setBirthDate(selectedDate);
-    }
+    if (selectedDate) setBirthDate(selectedDate);
   };
+
+  // Custom buttons/header to ensure visible text colors on iOS
+  const CustomCancelButton = ({ onPress, label }: { onPress: () => void; label: string }) => (
+    <TouchableOpacity onPress={onPress} style={{ paddingVertical: 12, paddingHorizontal: 16 }}>
+      <Text style={{ color: Colors.primary, fontSize: FontSizes.md }}>{label}</Text>
+    </TouchableOpacity>
+  );
+
+  const CustomConfirmButton = ({ onPress, label }: { onPress: () => void; label: string }) => (
+    <TouchableOpacity onPress={onPress} style={{ paddingVertical: 12, paddingHorizontal: 16 }}>
+      <Text style={{ color: Colors.primary, fontSize: FontSizes.md, fontWeight: '700' }}>{label}</Text>
+    </TouchableOpacity>
+  );
+
+  const CustomHeader = ({ label }: { label: string }) => (
+    <View style={{ padding: 12, alignItems: 'center', backgroundColor: Colors.surface }}>
+      <Text style={{ color: Colors.primary, fontWeight: '700', fontSize: FontSizes.md }}>{label}</Text>
+    </View>
+  );
 
   return (
     <SafeAreaView style={styles.container}>
@@ -119,7 +141,15 @@ export default function RegisterScreen() {
 
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Teléfono</Text>
-              <TextInput style={styles.input} placeholder="667 136 1586"  placeholderTextColor={Colors.textMuted} keyboardType="phone-pad" value={phone} onChangeText={setPhone} />
+              <TextInput 
+                style={styles.input} 
+                placeholder="(667) 136-1586"  
+                placeholderTextColor={Colors.textMuted} 
+                keyboardType="phone-pad" 
+                value={phone} 
+                onChangeText={(t) => setPhone(formatPhone(t))} 
+                maxLength={14}
+              />
             </View>
 
             <View style={styles.row}>
@@ -151,17 +181,25 @@ export default function RegisterScreen() {
               </View>
             </View>
 
-            {showDatePicker && (
-              <DateTimePicker
-                value={birthDate || new Date()}
-                mode="date"
-                display="default"
-                themeVariant="light"
-                textColor={Colors.primary}
-                onChange={onDateChange}
-                maximumDate={new Date()}
-              />
-            )}
+            <DateTimePickerModal
+              isVisible={showDatePicker}
+              mode="date"
+              date={birthDate || new Date()}
+              textColor={Colors.primary}
+              maximumDate={new Date()}
+              onConfirm={(d) => handleConfirmDate(d)}
+              onCancel={() => setShowDatePicker(false)}
+              isDarkModeEnabled={false}
+              // Force spinner on iOS so textColor is applied and dates are readable
+              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+              // Ensure picker background matches app surface on iOS
+              pickerContainerStyleIOS={{ backgroundColor: Colors.surface }}
+              pickerComponentStyleIOS={{ backgroundColor: Colors.surface }}
+              // Use custom iOS buttons/header to ensure readability on custom themes
+              customCancelButtonIOS={(props) => <CustomCancelButton onPress={props.onPress} label={props.label} />}
+              customConfirmButtonIOS={(props) => <CustomConfirmButton onPress={props.onPress} label={props.label} />}
+              customHeaderIOS={(props) => <CustomHeader label={props.label} />}
+            />
 
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Datos Clínicos (Opcional)</Text>

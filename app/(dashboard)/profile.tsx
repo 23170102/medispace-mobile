@@ -30,23 +30,53 @@ export default function ProfileScreen() {
   const primaryRole = getRoleLabel(getPrimaryRole(roles));
 
   const pickImage = async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Permiso denegado', 'Necesitamos acceso a tu galería para cambiar la foto.');
-      return;
-    }
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.7,
-      base64: true, // Solicitar base64 explícitamente
-    });
-
-    if (!result.canceled && result.assets[0].base64) {
-      uploadAvatar(result.assets[0].uri, result.assets[0].base64);
-    }
+    Alert.alert(
+      'Cambiar foto de perfil',
+      'Selecciona una opción',
+      [
+        {
+          text: 'Tomar Foto',
+          onPress: async () => {
+            const { status } = await ImagePicker.requestCameraPermissionsAsync();
+            if (status !== 'granted') {
+              Alert.alert('Permiso denegado', 'Necesitamos acceso a tu cámara para tomar la foto.');
+              return;
+            }
+            const result = await ImagePicker.launchCameraAsync({
+              mediaTypes: ImagePicker.MediaTypeOptions.Images,
+              allowsEditing: true,
+              aspect: [1, 1],
+              quality: 0.7,
+              base64: true,
+            });
+            if (!result.canceled && result.assets[0].base64) {
+              uploadAvatar(result.assets[0].uri, result.assets[0].base64);
+            }
+          }
+        },
+        {
+          text: 'Elegir de Galería',
+          onPress: async () => {
+            const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+            if (status !== 'granted') {
+              Alert.alert('Permiso denegado', 'Necesitamos acceso a tu galería para cambiar la foto.');
+              return;
+            }
+            const result = await ImagePicker.launchImageLibraryAsync({
+              mediaTypes: ImagePicker.MediaTypeOptions.Images,
+              allowsEditing: true,
+              aspect: [1, 1],
+              quality: 0.7,
+              base64: true,
+            });
+            if (!result.canceled && result.assets[0].base64) {
+              uploadAvatar(result.assets[0].uri, result.assets[0].base64);
+            }
+          }
+        },
+        { text: 'Cancelar', style: 'cancel' }
+      ]
+    );
   };
 
   const uploadAvatar = async (uri: string, base64Data: string) => {
@@ -98,7 +128,7 @@ export default function ProfileScreen() {
 
       if (updateError) throw updateError;
 
-      console.log("Avatar updated with Base64. URL:", publicUrl, "Bytes:", byteArray.length);
+      // avatar uploaded, refreshing profile
 
       await refreshProfile();
       Toast.show({ type: 'success', text1: '¡Éxito!', text2: 'Foto de perfil actualizada correctamente' });
@@ -160,7 +190,7 @@ export default function ProfileScreen() {
                 style={styles.avatarImage} 
                 cachePolicy="memory-disk"
                 onError={(e) => {
-                  console.warn("Failed to load avatar:", e.error, "URL:", profile.avatar_url);
+                  if (__DEV__) console.warn("Failed to load avatar:", e.error, "URL:", profile.avatar_url);
                 }}
               />
             ) : (

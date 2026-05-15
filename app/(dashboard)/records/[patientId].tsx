@@ -41,22 +41,52 @@ export default function PatientRecordScreen() {
 
   const pickPhoto = async () => {
     if (!isDoctor) return;
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Permiso denegado', 'Se requiere permiso para cambiar la foto.');
-      return;
-    }
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.7,
-    });
-
-    if (!result.canceled) {
-      await uploadPhoto(result.assets[0].uri);
-    }
+    
+    Alert.alert(
+      'Actualizar foto del paciente',
+      'Selecciona una opción',
+      [
+        {
+          text: 'Tomar Foto',
+          onPress: async () => {
+            const { status } = await ImagePicker.requestCameraPermissionsAsync();
+            if (status !== 'granted') {
+              Alert.alert('Permiso denegado', 'Se requiere permiso de la cámara para tomar la foto.');
+              return;
+            }
+            const result = await ImagePicker.launchCameraAsync({
+              mediaTypes: ImagePicker.MediaTypeOptions.Images,
+              allowsEditing: true,
+              aspect: [1, 1],
+              quality: 0.7,
+            });
+            if (!result.canceled) {
+              await uploadPhoto(result.assets[0].uri);
+            }
+          }
+        },
+        {
+          text: 'Elegir de Galería',
+          onPress: async () => {
+            const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+            if (status !== 'granted') {
+              Alert.alert('Permiso denegado', 'Se requiere permiso de la galería para elegir la foto.');
+              return;
+            }
+            const result = await ImagePicker.launchImageLibraryAsync({
+              mediaTypes: ImagePicker.MediaTypeOptions.Images,
+              allowsEditing: true,
+              aspect: [1, 1],
+              quality: 0.7,
+            });
+            if (!result.canceled) {
+              await uploadPhoto(result.assets[0].uri);
+            }
+          }
+        },
+        { text: 'Cancelar', style: 'cancel' }
+      ]
+    );
   };
 
   const uploadPhoto = async (uri: string) => {
@@ -175,7 +205,7 @@ export default function PatientRecordScreen() {
         targetId = apts?.[0]?.id;
       }
       
-      console.log("Intentando cerrar cita ID:", targetId);
+      // attempting to close appointment id
 
       const { error: recordError } = await supabase.from('medical_records').insert({
         patient_id: patientId as string,
@@ -210,7 +240,7 @@ export default function PatientRecordScreen() {
         }
 
         if (!updatedData || updatedData.length === 0) {
-          console.log("No se actualizó ninguna fila. Verificando permisos...");
+          // no rows updated; possible permissions issue
           return { success: true, id: null, warning: "La nota se guardó, pero la cita no cambió de estado. Verifica tus permisos." };
         }
 

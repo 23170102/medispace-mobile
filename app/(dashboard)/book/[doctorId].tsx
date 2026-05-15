@@ -1,5 +1,5 @@
-import { useState, useMemo, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator, TextInput, Image } from 'react-native';
+import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator, TextInput, Image, InteractionManager } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -29,6 +29,8 @@ export default function BookAppointmentScreen() {
   const { user } = useAuth();
   const router = useRouter();
   const queryClient = useQueryClient();
+  const scrollViewRef = useRef<any>(null);
+  const paymentSectionRef = useRef<any>(null);
   const [selectedDate, setSelectedDate] = useState('');
   const [selectedSlot, setSelectedSlot] = useState<any>(null);
   const [paymentMode, setPaymentMode] = useState<'full' | 'half'>('full');
@@ -139,6 +141,11 @@ export default function BookAppointmentScreen() {
   const lockMutation = useMutation({
     mutationFn: async (slot: any) => {
       if (!user || !selectedDate || !slot) return;
+      // Prevent locking past slots (defensive, in case UI allowed selection)
+      const slotTime = new Date(`${selectedDate}T${slot.start}:00`).getTime();
+      if (slotTime < Date.now()) {
+        throw new Error('No se puede apartar un horario en el pasado');
+      }
       await supabase.from('slot_locks').delete().eq('locked_by', user.id);
       const { error } = await supabase.from('slot_locks').insert({
         doctor_id: doctorId,
@@ -228,6 +235,17 @@ export default function BookAppointmentScreen() {
       while (sh < eh || (sh === eh && sm < em)) {
         const start = `${String(sh).padStart(2, '0')}:${String(sm).padStart(2, '0')}`;
         const isMorning = sh < 12;
+        // skip slots that are in the past (relative to now)
+        if (selectedDate) {
+          const slotDate = new Date(`${selectedDate}T${start}:00`);
+          if (slotDate.getTime() < Date.now()) {
+            let nextSm = sm + 30;
+            let nextSh = sh;
+            if (nextSm >= 60) { nextSh += 1; nextSm -= 60; }
+            sm = nextSm; sh = nextSh;
+            continue;
+          }
+        }
         let nextSm = sm + 30;
         let nextSh = sh;
         if (nextSm >= 60) { nextSh += 1; nextSm -= 60; }
@@ -245,7 +263,7 @@ export default function BookAppointmentScreen() {
       }
     }
     return generatedSlots;
-  }, [assignments, existingAppointments, activeLocks, user?.id]);
+    }, [assignments, existingAppointments, activeLocks, user?.id, selectedDate]);
 
   const morningSlots = slots.filter(s => s.isMorning);
   const afternoonSlots = slots.filter(s => !s.isMorning);
@@ -253,6 +271,9 @@ export default function BookAppointmentScreen() {
   const bookMutation = useMutation({
     mutationFn: async () => {
       if (!selectedSlot || !selectedDate || !user) throw new Error('Faltan datos');
+      // Defensive check: selected slot must not be in the past
+      const selectedSlotTime = new Date(`${selectedDate}T${selectedSlot.start}:00`).getTime();
+      if (selectedSlotTime < Date.now()) throw new Error('No puedes reservar una cita en el pasado');
       if (isStaff && !selectedPatient) throw new Error('Selecciona un paciente para agendar la cita');
       
       if (paymentMethod === 'card') {
@@ -302,6 +323,20 @@ export default function BookAppointmentScreen() {
       Toast.show({ type: 'error', text1: 'Error', text2: msg });
     },
   });
+
+  const isSelectedSlotPast = useMemo(() => {
+    if (!selectedSlot || !selectedDate) return false;
+    const t = new Date(`${selectedDate}T${selectedSlot.start}:00`).getTime();
+    return t < Date.now();
+  }, [selectedSlot, selectedDate]);
+
+  useEffect(() => {
+    if (selectedSlot) {
+      setTimeout(() => {
+        scrollViewRef.current?.scrollToEnd?.({ animated: true });
+      }, 150);
+    }
+  }, [selectedSlot]);
 
   const handleDownloadPDF = async () => {
     setIsGeneratingPdf(true);
@@ -381,7 +416,7 @@ export default function BookAppointmentScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView ref={scrollViewRef} contentContainerStyle={styles.content}>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}><Ionicons name="arrow-back" size={24} color={Colors.primary} /></TouchableOpacity>
           <View style={styles.headerInfo}>
@@ -513,7 +548,11 @@ export default function BookAppointmentScreen() {
                           <TouchableOpacity 
                             key={i} 
                             style={[styles.slotBtn, selectedSlot?.start === slot.start && styles.slotSelected, isBookedByMe && styles.timeBtnDisabled]} 
-                            onPress={() => { setSelectedSlot(slot); lockMutation.mutate(slot); }}
+                            onPress={() => {
+                              const slotTime = new Date(`${selectedDate}T${slot.start}:00`).getTime();
+                              if (slotTime < Date.now()) { Toast.show({ type: 'error', text1: 'Horario inválido', text2: 'No puedes seleccionar un horario en el pasado.' }); return; }
+                              setSelectedSlot(slot); lockMutation.mutate(slot);
+                            }}
                             disabled={isBookedByMe}
                           >
                             <Text style={[styles.slotText, selectedSlot?.start === slot.start && styles.slotTextSelected, isBookedByMe && styles.timeTextDisabled]}>{formatTime12h(slot.start)}</Text>
@@ -538,7 +577,11 @@ export default function BookAppointmentScreen() {
                           <TouchableOpacity 
                             key={i} 
                             style={[styles.slotBtn, selectedSlot?.start === slot.start && styles.slotSelected, isBookedByMe && styles.timeBtnDisabled]} 
-                            onPress={() => { setSelectedSlot(slot); lockMutation.mutate(slot); }}
+                            onPress={() => {
+                              const slotTime = new Date(`${selectedDate}T${slot.start}:00`).getTime();
+                              if (slotTime < Date.now()) { Toast.show({ type: 'error', text1: 'Horario inválido', text2: 'No puedes seleccionar un horario en el pasado.' }); return; }
+                              setSelectedSlot(slot); lockMutation.mutate(slot);
+                            }}
                             disabled={isBookedByMe}
                           >
                             <Text style={[styles.slotText, selectedSlot?.start === slot.start && styles.slotTextSelected, isBookedByMe && styles.timeTextDisabled]}>{formatTime12h(slot.start)}</Text>
@@ -559,7 +602,7 @@ export default function BookAppointmentScreen() {
         )}
 
         {selectedSlot && (selectedPatient || !isStaff) && (
-          <View style={styles.summary}>
+          <View ref={paymentSectionRef} style={styles.summary}>
             <Text style={styles.summaryLabel}>RESUMEN</Text>
             <Text style={styles.summaryDate}>{format(new Date(selectedDate + 'T12:00:00'), "EEEE, d 'de' MMMM", { locale: es })} • {formatTime12h(selectedSlot.start)}</Text>
             {fee > 0 && (
@@ -642,7 +685,8 @@ export default function BookAppointmentScreen() {
                 )}
               </View>
             )}
-            <TouchableOpacity style={[styles.confirmBtn, bookMutation.isPending && { opacity: 0.6 }]} onPress={() => bookMutation.mutate()} disabled={bookMutation.isPending}>
+            {isSelectedSlotPast && <Text style={{ color: Colors.error, fontWeight: '800', marginBottom: 8 }}>No puedes reservar un horario en el pasado.</Text>}
+            <TouchableOpacity style={[styles.confirmBtn, (bookMutation.isPending || isSelectedSlotPast) && { opacity: 0.6 }]} onPress={() => bookMutation.mutate()} disabled={bookMutation.isPending || isSelectedSlotPast}>
               {bookMutation.isPending ? <ActivityIndicator color="white" /> : <Text style={styles.confirmBtnText}>Confirmar (${amountToPay.toFixed(2)})</Text>}
             </TouchableOpacity>
           </View>

@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../hooks/useAuth';
 import { supabase } from '../../lib/supabase';
+import { validatePhone, formatPhone, translateSupabaseError } from '../../lib/validation';
 import { Colors, Spacing, FontSizes, BorderRadius } from '../../constants/theme';
 
 export default function EditProfileScreen() {
@@ -13,6 +14,8 @@ export default function EditProfileScreen() {
   const [loading, setLoading] = useState(false);
 
   const [formData, setFormData] = useState({
+    firstName: profile?.first_name || '',
+    lastName: profile?.last_name || '',
     phone: profile?.phone || '',
     address: profile?.address || '',
     blood_type: profile?.blood_type || '',
@@ -24,11 +27,23 @@ export default function EditProfileScreen() {
   const handleSave = async () => {
     if (!profile?.user_id) return;
     
+    if (formData.phone && !validatePhone(formData.phone)) {
+      Alert.alert('Error', 'El número de teléfono personal no es válido (deben ser 10 dígitos)');
+      return;
+    }
+
+    if (formData.emergency_contact_phone && !validatePhone(formData.emergency_contact_phone)) {
+      Alert.alert('Error', 'El número de teléfono de emergencia no es válido (deben ser 10 dígitos)');
+      return;
+    }
+
     setLoading(true);
     try {
       const { error: userError } = await supabase
         .from('profiles')
         .update({
+          first_name: formData.firstName,
+          last_name: formData.lastName,
           phone: formData.phone,
         })
         .eq('id', profile.user_id);
@@ -54,7 +69,7 @@ export default function EditProfileScreen() {
       Alert.alert('Éxito', 'Perfil actualizado correctamente');
       router.back();
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'No se pudo actualizar el perfil');
+      Alert.alert('Error', translateSupabaseError(error.message) || 'No se pudo actualizar el perfil');
     } finally {
       setLoading(false);
     }
@@ -68,10 +83,14 @@ export default function EditProfileScreen() {
         <TextInput
           style={styles.input}
           value={formData[key]}
-          onChangeText={(text) => setFormData(prev => ({ ...prev, [key]: text }))}
+          onChangeText={(text) => {
+            const formatted = (key === 'phone' || key === 'emergency_contact_phone') ? formatPhone(text) : text;
+            setFormData(prev => ({ ...prev, [key]: formatted }));
+          }}
           placeholder={placeholder}
           placeholderTextColor={Colors.textMuted}
           keyboardType={keyboardType}
+          maxLength={(key === 'phone' || key === 'emergency_contact_phone') ? 14 : undefined}
         />
       </View>
     </View>
@@ -92,7 +111,11 @@ export default function EditProfileScreen() {
         </View>
 
         <ScrollView contentContainerStyle={styles.content}>
-          <Text style={styles.sectionTitle}>Información de Contacto</Text>
+          <Text style={styles.sectionTitle}>Información Personal</Text>
+          {renderInput('Nombre(s)', 'firstName', 'person-outline', 'Tu nombre')}
+          {renderInput('Apellidos', 'lastName', 'person-outline', 'Tus apellidos')}
+
+          <Text style={[styles.sectionTitle, { marginTop: Spacing.xl }]}>Información de Contacto</Text>
           {renderInput('Teléfono', 'phone', 'call-outline', 'Tu número de teléfono', 'phone-pad')}
           {renderInput('Dirección', 'address', 'location-outline', 'Tu dirección')}
 

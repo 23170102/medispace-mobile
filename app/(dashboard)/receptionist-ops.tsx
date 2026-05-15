@@ -8,6 +8,7 @@ import { useRouter } from 'expo-router';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../../lib/supabase';
 import { secondarySupabase } from '../../lib/secondarySupabase';
+import { validatePhone, formatPhone, cleanPhone } from '../../lib/validation';
 import Toast from 'react-native-toast-message';
 import { Colors, Spacing, BorderRadius, Shadows, FontSizes } from '../../constants/theme';
 import { useUpcomingAppointments } from '../../hooks/useDashboardData';
@@ -32,8 +33,7 @@ export default function ReceptionistOpsScreen() {
     if (!nameRegex.test(newPatient.last_name)) {
       return 'El apellido solo puede contener letras (mín. 2)';
     }
-    const phoneClean = newPatient.phone.replace(/\s/g, '');
-    if (!/^\d{10}$/.test(phoneClean)) {
+    if (!validatePhone(newPatient.phone)) {
       return 'El teléfono debe tener exactamente 10 dígitos';
     }
     return null;
@@ -45,8 +45,8 @@ export default function ReceptionistOpsScreen() {
       if (validationError) {
         throw new Error(validationError);
       }
-      const phoneClean = newPatient.phone.replace(/\s/g, '');
-      const email = `${phoneClean}@medispace.tmp`;
+      const phoneCleaned = cleanPhone(newPatient.phone);
+      const email = `${phoneCleaned}@medispace.tmp`;
       const password = 'Paciente123!';
       const { data, error } = await secondarySupabase.auth.signUp({
         email,
@@ -55,7 +55,7 @@ export default function ReceptionistOpsScreen() {
           data: {
             first_name: newPatient.first_name,
             last_name: newPatient.last_name,
-            phone: phoneClean,
+            phone: phoneCleaned,
             role: 'patient'
           }
         }
@@ -193,7 +193,17 @@ export default function ReceptionistOpsScreen() {
               </View>
               <View style={styles.inputGroup}><Text style={styles.inputLabel}>Nombre</Text><TextInput style={styles.input} value={newPatient.first_name} onChangeText={t => setNewPatient(p => ({...p, first_name: t}))}/></View>
               <View style={styles.inputGroup}><Text style={styles.inputLabel}>Apellido</Text><TextInput style={styles.input} value={newPatient.last_name} onChangeText={t => setNewPatient(p => ({...p, last_name: t}))}/></View>
-              <View style={styles.inputGroup}><Text style={styles.inputLabel}>Teléfono</Text><TextInput style={styles.input} keyboardType="phone-pad" value={newPatient.phone} onChangeText={t => setNewPatient(p => ({...p, phone: t}))}/></View>
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Teléfono</Text>
+                <TextInput 
+                  style={styles.input} 
+                  keyboardType="phone-pad" 
+                  value={newPatient.phone} 
+                  onChangeText={t => setNewPatient(p => ({...p, phone: formatPhone(t)}))}
+                  maxLength={14}
+                  placeholder="(000) 000-0000"
+                />
+              </View>
               <TouchableOpacity style={styles.submitBtn} onPress={() => quickRegisterMutation.mutate()} disabled={quickRegisterMutation.isPending}>
                 {quickRegisterMutation.isPending ? <ActivityIndicator color="white" /> : <Text style={styles.submitBtnText}>Crear Paciente</Text>}
               </TouchableOpacity>

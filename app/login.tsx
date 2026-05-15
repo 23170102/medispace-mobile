@@ -5,17 +5,20 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import Toast from 'react-native-toast-message';
+import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
+import { translateSupabaseError } from '../lib/validation';
 import { Colors, Spacing, FontSizes, BorderRadius, Gradients, Shadows } from '../constants/theme';
 
 const { width } = Dimensions.get('window');
 
 export default function LoginScreen() {
   const router = useRouter();
+  const { signIn, profile } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [isKeyboardVisible, setKeyboardVisible] = useState(false);
 
   useEffect(() => {
@@ -39,15 +42,48 @@ export default function LoginScreen() {
       Toast.show({ type: 'error', text1: 'Campos requeridos', text2: 'Por favor ingresa tu correo y contraseña' });
       return;
     }
-    setLoading(true);
+    setIsSubmitting(true);
     try {
-      const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
-      if (error) throw error;
+      console.debug('login: calling signIn for', email.trim());
+
+      const signPromise = signIn(email.trim(), password);
+
+      // Wait up to 6s for signIn to resolve; if it times out, check if a
+      // session exists (auth listener may have fired) and proceed.
+      const race = await Promise.race([
+        signPromise.then((r) => ({ res: r })),
+        new Promise((resolve) => setTimeout(() => resolve({ timedOut: true }), 6000)),
+      ]) as { res?: any; timedOut?: true };
+
+      if ((race as any).timedOut) {
+        if (__DEV__) console.warn('login: signIn timed out — checking session state');
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session) {
+          console.debug('login: session found after timeout, navigating');
+            router.replace('/(dashboard)/home');
+            Toast.show({ type: 'success', text1: '¡Bienvenido!' });
+            return;
+          }
+        } catch (e) {
+          if (__DEV__) console.warn('login: getSession failed after timeout', e);
+        }
+
+        throw new Error('Tiempo de conexión agotado. Intenta de nuevo.');
+      }
+
+      console.debug('login: signIn resolved', race.res);
+
+      // signIn resolved — do not navigate directly. AuthGate will detect the
+      // signed-in user and redirect to the dashboard. This avoids navigation
+      // races when multiple parts of the app attempt to replace the route.
       Toast.show({ type: 'success', text1: '¡Bienvenido!' });
     } catch (error: any) {
-      Toast.show({ type: 'error', text1: 'Error de acceso', text2: error.message === 'Invalid login credentials' ? 'Credenciales incorrectas' : error.message });
+      Toast.show({ type: 'error', text1: 'Error de acceso', text2: translateSupabaseError(error.message) });
+      // Avoid leaving the UI in a loading state if an exception was thrown
+      if (__DEV__) console.warn('Login failed:', (error as any)?.message ?? error);
     } finally {
-      setLoading(false);
+      setIsSubmitting(false);
     }
   };
 
@@ -134,9 +170,11 @@ export default function LoginScreen() {
               <Text style={styles.forgotText}>¿Olvidaste tu contraseña?</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.loginBtn} onPress={handleLogin} disabled={loading} activeOpacity={0.8}>
+            
+
+            <TouchableOpacity style={styles.loginBtn} onPress={handleLogin} disabled={isSubmitting} activeOpacity={0.8}>
               <LinearGradient colors={Gradients.secondary} start={{x: 0, y: 0}} end={{x: 1, y: 0}} style={styles.gradientBtn}>
-                {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.loginBtnText}>Entrar a MediSpace</Text>}
+                {isSubmitting ? <ActivityIndicator color="#fff" /> : <Text style={styles.loginBtnText}>Entrar a MediSpace</Text>}
               </LinearGradient>
             </TouchableOpacity>
 

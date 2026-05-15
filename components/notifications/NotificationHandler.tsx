@@ -19,13 +19,11 @@ export default function NotificationHandler() {
     });
 
     notificationListener.current = Notifications.addNotificationReceivedListener(notification => {
-      console.log('Notification received in foreground:', notification);
+      // notification received (foreground)
     });
 
     responseListener.current = Notifications.addNotificationResponseReceivedListener(response => {
       const data = response.notification.request.content.data;
-      console.log('User interacted with notification:', data);
-
       if (data?.targetRoute) {
         router.push(data.targetRoute as string);
       }

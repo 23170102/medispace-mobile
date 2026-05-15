@@ -1,13 +1,18 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, Alert, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
+import { translateSupabaseError } from '../../lib/validation';
 import { Colors, Spacing, FontSizes, BorderRadius } from '../../constants/theme';
+import { useAuth } from '../../hooks/useAuth';
+import Toast from 'react-native-toast-message';
 
 export default function ChangePasswordScreen() {
   const router = useRouter();
+  const { signOut, signOutLocal } = useAuth();
+  const inFlight = useRef(false);
   const [loading, setLoading] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -29,19 +34,82 @@ export default function ChangePasswordScreen() {
       return;
     }
 
+    // Prevent double submission from rapid taps
+    if (inFlight.current) return;
+    inFlight.current = true;
     setLoading(true);
     try {
-      const { error } = await supabase.auth.updateUser({
-        password: newPassword
+      // change-password: updateUser started
+
+      const updatePromise = supabase.auth.updateUser({ password: newPassword });
+
+      // Wait up to 6s for the update to complete; if it hangs proceed to sign out
+      const race = await Promise.race([
+        updatePromise.then((r) => ({ res: r })),
+        new Promise((resolve) => setTimeout(() => resolve({ timedOut: true }), 6000)),
+      ]) as { res?: any; timedOut?: true };
+
+      if (race.timedOut) {
+        if (__DEV__) console.warn('[change-password] updateUser timed out — proceeding to sign out (safe)');
+        Toast.show({ type: 'info', text1: 'Actualización en proceso', text2: 'Se ha solicitado el cambio de contraseña. Te desconectamos para que ingreses con la nueva contraseña.' });
+
+        // Safe sign-out: don't block indefinitely on network calls.
+        try {
+          const so = signOut();
+          const soRace = await Promise.race([
+            so.then(() => ({ ok: true })),
+            new Promise((resolve) => setTimeout(() => resolve({ timedOut: true }), 3000)),
+          ]) as { ok?: true; timedOut?: true };
+          if ((soRace as any).timedOut) {
+            if (__DEV__) console.warn('[change-password] signOut timed out, falling back to signOutLocal');
+            await signOutLocal();
+          }
+        } catch (e) {
+          if (__DEV__) console.warn('[change-password] signOut threw, falling back to signOutLocal', e);
+          await signOutLocal();
+        }
+
+        router.replace('/login');
+        // Let the original updatePromise continue in background (no await).
+        return;
+      }
+
+      const { res } = race;
+      // change-password: updateUser result
+
+      if (res?.error) {
+        throw res.error;
+      }
+
+      Toast.show({
+        type: 'success',
+        text1: 'Contraseña actualizada',
+        text2: 'Inicia sesión con tu nueva contraseña',
       });
 
-      if (error) throw error;
+      // change-password: calling safe signOut
+      try {
+        const so = signOut();
+        const soRace = await Promise.race([
+          so.then(() => ({ ok: true })),
+          new Promise((resolve) => setTimeout(() => resolve({ timedOut: true }), 3000)),
+        ]) as { ok?: true; timedOut?: true };
+        if ((soRace as any).timedOut) {
+          if (__DEV__) console.warn('[change-password] signOut timed out, falling back to signOutLocal');
+          await signOutLocal();
+        }
+      } catch (e) {
+        if (__DEV__) console.warn('[change-password] signOut threw, falling back to signOutLocal', e);
+        await signOutLocal();
+      }
 
-      Alert.alert('Éxito', 'Tu contraseña ha sido actualizada');
-      router.replace('/(dashboard)/profile');
+      router.replace('/login');
+      // change-password: router.replace done
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'No se pudo actualizar la contraseña');
+      console.error('[change-password] error:', error?.message ?? error);
+      Alert.alert('Error', translateSupabaseError(error.message) || 'No se pudo actualizar la contraseña');
     } finally {
+      inFlight.current = false;
       setLoading(false);
     }
   };

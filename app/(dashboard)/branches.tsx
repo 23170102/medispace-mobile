@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
+import { validatePhone, formatPhone, cleanPhone } from '../../lib/validation';
 import { Colors, Spacing, FontSizes, BorderRadius } from '../../constants/theme';
 
 export default function BentoBranchesScreen() {
@@ -42,7 +43,13 @@ export default function BentoBranchesScreen() {
           if (officesError) throw officesError;
         }
       } else {
-        const { error } = await supabase.from('branches').insert(formData);
+        if (formData.phone && !validatePhone(formData.phone)) {
+          throw new Error('El teléfono de la sucursal no es válido (deben ser 10 dígitos)');
+        }
+        const { error } = await supabase.from('branches').insert({
+          ...formData,
+          phone: cleanPhone(formData.phone)
+        });
         if (error) throw error;
       }
     },
@@ -206,10 +213,11 @@ export default function BentoBranchesScreen() {
                   <TextInput 
                     style={styles.input} 
                     value={formData.phone} 
-                    onChangeText={t => setFormData({...formData, phone: t})} 
-                    placeholder="Número telefónico"
+                    onChangeText={t => setFormData({...formData, phone: formatPhone(t)})} 
+                    placeholder="(000) 000-0000"
                     placeholderTextColor={Colors.textMuted}
                     keyboardType="phone-pad"
+                    maxLength={14}
                   />
 
                   <Text style={styles.inputLabel}>Estatus de Sede</Text>

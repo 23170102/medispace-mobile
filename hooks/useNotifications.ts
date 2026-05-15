@@ -27,9 +27,7 @@ async function saveTokenToSupabase(userId: string, token: string) {
       .eq('id', userId);
     
     if (error) {
-      console.warn('Error saving push token to Supabase:', error.message);
-    } else {
-      console.log('Push token saved successfully for user:', userId);
+      if (__DEV__) console.warn('Error saving push token to Supabase:', error.message);
     }
   } catch (err) {
     console.error('Unexpected error saving push token:', err);
@@ -56,7 +54,7 @@ async function registerForPushNotificationsAsync() {
       finalStatus = status;
     }
     if (finalStatus !== 'granted') {
-      console.log('Failed to get push token for push notification!');
+      // permission denied for push notifications
       return;
     }
     
@@ -64,12 +62,12 @@ async function registerForPushNotificationsAsync() {
     // In development mode (Expo Go), it should just work.
     try {
       token = (await Notifications.getExpoPushTokenAsync()).data;
-      console.log('Expo Push Token generated:', token);
+      // expo push token generated
     } catch (e) {
-      console.warn('Error getting Expo push token:', e);
+      if (__DEV__) console.warn('Error getting Expo push token:', e);
     }
   } else {
-    console.log('Must use physical device for Push Notifications');
+    // must use physical device for push notifications
   }
 
   return token;

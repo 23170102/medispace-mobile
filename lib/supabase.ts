@@ -1,9 +1,9 @@
 import 'react-native-url-polyfill/auto';
 import { createClient } from '@supabase/supabase-js';
-import * as SecureStore from 'expo-secure-store';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 
-// Adapter para almacenamiento: SecureStore en móvil, localStorage en Web
+// Adapter para almacenamiento: AsyncStorage en móvil, localStorage en Web
 const isWeb = Platform.OS === 'web';
 
 const storageAdapter = {
@@ -14,7 +14,7 @@ const storageAdapter = {
       }
       return null;
     }
-    return SecureStore.getItemAsync(key);
+    return AsyncStorage.getItem(key);
   },
   setItem: (key: string, value: string) => {
     if (isWeb) {
@@ -23,7 +23,7 @@ const storageAdapter = {
       }
       return Promise.resolve();
     }
-    return SecureStore.setItemAsync(key, value);
+    return AsyncStorage.setItem(key, value);
   },
   removeItem: (key: string) => {
     if (isWeb) {
@@ -32,7 +32,7 @@ const storageAdapter = {
       }
       return Promise.resolve();
     }
-    return SecureStore.deleteItemAsync(key);
+    return AsyncStorage.removeItem(key);
   },
 };
 

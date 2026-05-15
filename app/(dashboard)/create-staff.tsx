@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { secondarySupabase } from '../../lib/secondarySupabase';
 import { supabase } from '../../lib/supabase';
+import { validatePhone, formatPhone, translateSupabaseError } from '../../lib/validation';
 import { Colors, Spacing, FontSizes, BorderRadius } from '../../constants/theme';
 
 const specialties = [
@@ -37,6 +38,11 @@ export default function CreateStaffScreen() {
 
     if (role === 'doctor' && (!formData.license || !formData.fee)) {
       Alert.alert('Error', 'Los doctores requieren cédula profesional y costo de consulta');
+      return;
+    }
+
+    if (formData.phone && !validatePhone(formData.phone)) {
+      Alert.alert('Error', 'El número de celular no es válido (deben ser 10 dígitos)');
       return;
     }
 
@@ -98,7 +104,7 @@ export default function CreateStaffScreen() {
       Alert.alert('Éxito', `El ${role === 'doctor' ? 'doctor' : 'recepcionista'} ha sido registrado correctamente.`);
       router.back();
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'No se pudo crear el usuario');
+      Alert.alert('Error', translateSupabaseError(error.message) || 'No se pudo crear el usuario');
     } finally {
       setLoading(false);
     }
@@ -112,12 +118,16 @@ export default function CreateStaffScreen() {
         <TextInput
           style={styles.input}
           value={value}
-          onChangeText={onChange}
+          onChangeText={(t) => {
+            const formatted = (label === 'Número de Celular' || icon === 'call-outline') ? formatPhone(t) : t;
+            onChange(formatted);
+          }}
           placeholder={placeholder}
           placeholderTextColor={Colors.textMuted}
           secureTextEntry={secure}
           keyboardType={keyboard}
           autoCapitalize={secure ? 'none' : 'words'}
+          maxLength={(label === 'Número de Celular' || icon === 'call-outline') ? 14 : undefined}
         />
       </View>
     </View>

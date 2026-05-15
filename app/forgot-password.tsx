@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import Toast from 'react-native-toast-message';
 import { supabase } from '../lib/supabase';
+import { translateSupabaseError } from '../lib/validation';
 import { Colors, Spacing, BorderRadius, Gradients, Shadows } from '../constants/theme';
 
 export default function ForgotPasswordScreen() {
@@ -40,7 +41,7 @@ export default function ForgotPasswordScreen() {
       Toast.show({ 
         type: 'error', 
         text1: 'Error', 
-        text2: error.message 
+        text2: translateSupabaseError(error.message) 
       });
     } finally {
       setLoading(false);
