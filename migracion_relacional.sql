@@ -121,9 +121,13 @@ CREATE TABLE IF NOT EXISTS public.appointments (
     patient_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
     doctor_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
     notes TEXT,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    CONSTRAINT unique_doctor_slot UNIQUE (doctor_id, start_time)
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS unique_doctor_slot_active 
+ON public.appointments (doctor_id, start_time) 
+WHERE (status != 'cancelled');
+
 
 -- Medical Records
 CREATE TABLE IF NOT EXISTS public.medical_records (
@@ -177,6 +181,7 @@ DECLARE
     v_birth_date DATE;
     v_gender TEXT;
     v_allergies TEXT;
+    v_created_by_reception BOOLEAN;
 BEGIN
     -- Extract metadata
     v_role := COALESCE(new.raw_user_meta_data->>'role', 'patient');
@@ -193,9 +198,10 @@ BEGIN
         v_birth_date := NULLIF(new.raw_user_meta_data->>'birth_date', '')::DATE;
         v_gender := new.raw_user_meta_data->>'gender';
         v_allergies := new.raw_user_meta_data->>'clinical_notes';
+        v_created_by_reception := COALESCE((new.raw_user_meta_data->>'created_by_reception')::BOOLEAN, FALSE);
         
-        INSERT INTO public.patient_details (user_id, birth_date, gender, allergies)
-        VALUES (new.id, v_birth_date, v_gender, v_allergies);
+        INSERT INTO public.patient_details (user_id, birth_date, gender, allergies, created_by_reception)
+        VALUES (new.id, v_birth_date, v_gender, v_allergies, v_created_by_reception);
     ELSIF v_role = 'doctor' THEN
         INSERT INTO public.doctor_details (user_id)
         VALUES (new.id);

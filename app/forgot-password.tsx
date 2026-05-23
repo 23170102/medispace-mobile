@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, ScrollView, ActivityIndicator } from 'react-native';
+import { useState, useEffect } from 'react';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, ScrollView, ActivityIndicator, Keyboard } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -13,6 +13,20 @@ export default function ForgotPasswordScreen() {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
+  const [isKeyboardVisible, setKeyboardVisible] = useState(false);
+
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+
+    const showListener = Keyboard.addListener(showEvent, () => setKeyboardVisible(true));
+    const hideListener = Keyboard.addListener(hideEvent, () => setKeyboardVisible(false));
+
+    return () => {
+      showListener.remove();
+      hideListener.remove();
+    };
+  }, []);
 
   const handleResetPassword = async () => {
     if (!email.trim()) {
@@ -50,31 +64,59 @@ export default function ForgotPasswordScreen() {
 
   return (
     <View style={styles.container}>
-      <LinearGradient colors={Gradients.primary} style={styles.headerBackground}>
-        <SafeAreaView>
+      <LinearGradient 
+        colors={Gradients.primary} 
+        style={[
+          styles.headerBackground,
+          isKeyboardVisible && styles.headerBackgroundCollapsed
+        ]}
+      >
+        <SafeAreaView edges={['top']}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
             <Ionicons name="arrow-back" size={24} color={Colors.white} />
           </TouchableOpacity>
         </SafeAreaView>
         
-        <View style={styles.headerContent}>
-          <Ionicons name="lock-open-outline" size={80} color={Colors.white} style={{ marginBottom: 10 }} />
-          <Text style={styles.title}>Recuperar Acceso</Text>
-          <Text style={styles.subtitle}>Te enviaremos un enlace a tu correo</Text>
+        <View style={[
+          styles.headerContent,
+          isKeyboardVisible && styles.headerContentCollapsed
+        ]}>
+          {!isKeyboardVisible && (
+            <Ionicons name="lock-open-outline" size={70} color={Colors.white} style={{ marginBottom: 8 }} />
+          )}
+          {isKeyboardVisible && (
+            <Ionicons name="lock-open-outline" size={24} color={Colors.white} />
+          )}
+          <Text style={[styles.title, isKeyboardVisible && styles.titleCollapsed]}>Recuperar Acceso</Text>
+          {!isKeyboardVisible && (
+            <Text style={styles.subtitle}>Te enviaremos un enlace a tu correo</Text>
+          )}
         </View>
       </LinearGradient>
 
       <KeyboardAvoidingView 
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
-        style={styles.formArea}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined} 
+        style={[
+          styles.formArea,
+          isKeyboardVisible && styles.formAreaCollapsed
+        ]}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
       >
-        <ScrollView contentContainerStyle={styles.scrollContent}>
-          <View style={styles.formCard}>
-            <Text style={styles.infoText}>
-              Ingresa el correo electrónico asociado a tu cuenta de MediSpace para recibir las instrucciones de recuperación.
-            </Text>
+        <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+          <View style={[
+            styles.formCard,
+            isKeyboardVisible && styles.formCardCollapsed
+          ]}>
+            {!isKeyboardVisible && (
+              <Text style={styles.infoText}>
+                Ingresa el correo electrónico asociado a tu cuenta de MediSpace para recibir las instrucciones de recuperación.
+              </Text>
+            )}
             
-            <View style={styles.inputGroup}>
+            <View style={[
+              styles.inputGroup,
+              isKeyboardVisible && styles.inputGroupCollapsed
+            ]}>
               <Text style={styles.label}>Correo electrónico</Text>
               <View style={styles.inputWrapper}>
                 <Ionicons name="mail-outline" size={20} color={Colors.textMuted} style={styles.inputIcon} />
@@ -118,23 +160,29 @@ export default function ForgotPasswordScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
-  headerBackground: { height: 300, borderBottomLeftRadius: 60, borderBottomRightRadius: 60 },
-  headerContent: { alignItems: 'center', justifyContent: 'center', marginTop: 10 },
+  headerBackground: { height: 320, borderBottomLeftRadius: 60, borderBottomRightRadius: 60 },
+  headerBackgroundCollapsed: { height: 140, borderBottomLeftRadius: 30, borderBottomRightRadius: 30 },
+  headerContent: { alignItems: 'center', justifyContent: 'center', marginTop: 5 },
+  headerContentCollapsed: { marginTop: 0, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
   backBtn: { marginLeft: Spacing.lg, marginTop: Spacing.sm },
   title: { fontSize: 28, fontWeight: '900', color: Colors.white, letterSpacing: -0.5 },
-  subtitle: { fontSize: 16, color: 'rgba(255,255,255,0.8)', fontWeight: '500', marginTop: 5 },
+  titleCollapsed: { fontSize: 20 },
+  subtitle: { fontSize: 15, color: 'rgba(255,255,255,0.8)', fontWeight: '500', marginTop: 4 },
   
   formArea: { flex: 1, marginTop: -50 },
-  scrollContent: { paddingHorizontal: Spacing.lg, paddingBottom: 40 },
+  formAreaCollapsed: { marginTop: -20 },
+  scrollContent: { flexGrow: 1, paddingHorizontal: Spacing.lg, paddingBottom: 40 },
   formCard: { 
     backgroundColor: Colors.white, borderRadius: BorderRadius.xxl, 
     padding: Spacing.xl, ...Shadows.large,
   },
+  formCardCollapsed: { padding: Spacing.lg },
   infoText: { 
     fontSize: 14, color: Colors.textSecondary, textAlign: 'center', 
     lineHeight: 22, marginBottom: 30, fontWeight: '500' 
   },
   inputGroup: { marginBottom: 30 },
+  inputGroupCollapsed: { marginBottom: 15 },
   label: { fontSize: 11, fontWeight: '800', color: Colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8, marginLeft: 4 },
   inputWrapper: {
     flexDirection: 'row', alignItems: 'center', backgroundColor: '#f8fafc',

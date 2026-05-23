@@ -104,7 +104,7 @@ const styles = StyleSheet.create({
   profileBtn: { ...Shadows.medium },
   profileImage: { width: 48, height: 48, borderRadius: 24, borderWidth: 2, borderColor: 'white' },
   profilePlaceholder: { width: 48, height: 48, borderRadius: 24, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' },
-  
+
   heroAction: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 24 },
   roleTag: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(255,255,255,0.15)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: BorderRadius.full },
   roleTagText: { color: 'white', fontSize: 10, fontWeight: '900', letterSpacing: 1 },

@@ -58,7 +58,7 @@ export default function RegisterScreen() {
 
     setLoading(true);
     try {
-      const { error } = await supabase.auth.signUp({
+      const { data, error } = await supabase.auth.signUp({
         email: email.trim(),
         password,
         options: {
@@ -73,6 +73,12 @@ export default function RegisterScreen() {
         },
       });
       if (error) throw error;
+
+      // Validar si el correo ya está registrado (User Enumeration Protection de Supabase)
+      if (data?.user && (!data.user.identities || data.user.identities.length === 0)) {
+        throw new Error('User already registered');
+      }
+
       Toast.show({ type: 'success', text1: '¡Cuenta creada!', text2: 'Revisa tu correo para confirmar' });
       router.replace('/login');
     } catch (error: any) {

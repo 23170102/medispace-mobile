@@ -456,7 +456,7 @@ export default function PatientRecordScreen() {
           </TouchableOpacity>
           <View>
             <Text style={styles.headerName}>{patient?.first_name} {patient?.last_name}</Text>
-            <Text style={styles.headerSub}>ID: {patient?.id.slice(0, 8)} • {age} años • {patient?.gender === 'male' ? 'M' : 'F'}</Text>
+            <Text style={styles.headerSub}>{age} años • {patient?.gender === 'male' ? 'M' : 'F'}</Text>
           </View>
         </View>
       </View>

@@ -43,6 +43,20 @@ export default function AdminDashboard() {
           <Text style={styles.statVal}>{adminStatsQuery.data?.offices || 0}</Text>
           <Text style={styles.statLab}>Consul.</Text>
         </View>
+        <View style={styles.statCard}>
+          <LinearGradient colors={['#f0fdf5', '#ccfbf1']} style={styles.statIconGradient}>
+            <Ionicons name="phone-portrait-outline" size={20} color="#0d9488" />
+          </LinearGradient>
+          <Text style={styles.statVal}>{adminStatsQuery.data?.directPatients || 0}</Text>
+          <Text style={styles.statLab}>Pac. Directos</Text>
+        </View>
+        <View style={styles.statCard}>
+          <LinearGradient colors={['#fff1f2', '#ffe4e6']} style={styles.statIconGradient}>
+            <Ionicons name="create-outline" size={20} color="#e11d48" />
+          </LinearGradient>
+          <Text style={styles.statVal}>{adminStatsQuery.data?.receptionPatients || 0}</Text>
+          <Text style={styles.statLab}>Pac. Recepc.</Text>
+        </View>
       </View>
 
       <View style={styles.managementInfoCard}>

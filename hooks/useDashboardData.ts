@@ -12,17 +12,21 @@ export function useAdminStats() {
   return useQuery({
     queryKey: ['admin-dashboard-stats'],
     queryFn: async () => {
-      const [doctorsCount, receptionistsCount, branchesCount, officesCount] = await Promise.all([
+      const [doctorsCount, receptionistsCount, branchesCount, officesCount, directPatientsCount, receptionPatientsCount] = await Promise.all([
         supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'doctor'),
         supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'receptionist'),
         supabase.from('branches').select('*', { count: 'exact', head: true }),
         supabase.from('offices').select('*', { count: 'exact', head: true }).eq('status', 'active'),
+        supabase.from('patient_details').select('*', { count: 'exact', head: true }).eq('created_by_reception', false),
+        supabase.from('patient_details').select('*', { count: 'exact', head: true }).eq('created_by_reception', true),
       ]);
       return {
         doctors: doctorsCount.count || 0,
         receptionists: receptionistsCount.count || 0,
         branches: branchesCount.count || 0,
         offices: officesCount.count || 0,
+        directPatients: directPatientsCount.count || 0,
+        receptionPatients: receptionPatientsCount.count || 0,
       };
     },
   });
@@ -104,10 +108,12 @@ export function useUpcomingAppointments(role: 'doctor' | 'patient' | 'receptioni
 
       const profiles = profilesResult?.map(u => ({ user_id: u.id, first_name: u.first_name, last_name: u.last_name, avatar_url: u.avatar_url })) || [];
 
-      return appointments.map(apt => ({
+      const mapped = appointments.map(apt => ({
         ...apt,
         counterparty: profiles?.find(p => p.user_id === (role === 'patient' ? apt.doctor_id : apt.patient_id)) || null
       }));
+
+      return mapped.sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime());
     },
     enabled: !!user?.id || role === 'receptionist',
   });

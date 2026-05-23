@@ -6,9 +6,10 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { useRouter } from 'expo-router';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import DateTimePickerModal from 'react-native-modal-datetime-picker';
 import { supabase } from '../../lib/supabase';
 import { secondarySupabase } from '../../lib/secondarySupabase';
-import { validatePhone, formatPhone, cleanPhone } from '../../lib/validation';
+import { validatePhone, formatPhone, cleanPhone, translateSupabaseError } from '../../lib/validation';
 import Toast from 'react-native-toast-message';
 import { Colors, Spacing, BorderRadius, Shadows, FontSizes } from '../../constants/theme';
 import { useUpcomingAppointments } from '../../hooks/useDashboardData';
@@ -18,20 +19,72 @@ export default function ReceptionistOpsScreen() {
   const queryClient = useQueryClient();
   const appointmentsQuery = useUpcomingAppointments('receptionist');
 
-  // Quick Register States
+  // Register States
   const [showQuickReg, setShowQuickReg] = useState(false);
-  const [newPatient, setNewPatient] = useState({ first_name: '', last_name: '', phone: '' });
+  const [newPatient, setNewPatient] = useState({
+    first_name: '',
+    last_name: '',
+    email: '',
+    phone: '',
+    birth_date: null as Date | null,
+    gender: null as 'male' | 'female' | 'other' | null,
+    clinical_notes: '',
+  });
+  const [showDatePicker, setShowDatePicker] = useState(false);
+
+  const handleConfirmDate = (selectedDate: Date) => {
+    setShowDatePicker(false);
+    if (selectedDate) {
+      setNewPatient(p => ({ ...p, birth_date: selectedDate }));
+    }
+  };
+
+  // Custom buttons/header to ensure visible text colors on iOS
+  const CustomCancelButton = ({ onPress, label }: { onPress: () => void; label: string }) => (
+    <TouchableOpacity onPress={onPress} style={{ paddingVertical: 12, paddingHorizontal: 16 }}>
+      <Text style={{ color: Colors.primary, fontSize: FontSizes.md }}>{label}</Text>
+    </TouchableOpacity>
+  );
+
+  const CustomConfirmButton = ({ onPress, label }: { onPress: () => void; label: string }) => (
+    <TouchableOpacity onPress={onPress} style={{ paddingVertical: 12, paddingHorizontal: 16 }}>
+      <Text style={{ color: Colors.primary, fontSize: FontSizes.md, fontWeight: '700' }}>{label}</Text>
+    </TouchableOpacity>
+  );
+
+  const CustomHeader = ({ label }: { label: string }) => (
+    <View style={{ padding: 12, alignItems: 'center', backgroundColor: Colors.surface }}>
+      <Text style={{ color: Colors.primary, fontWeight: '700', fontSize: FontSizes.md }}>{label}</Text>
+    </View>
+  );
+
+  const generateDefaultPassword = (firstName: string, birthDate: Date | null): string => {
+    const firstWord = firstName.trim() ? firstName.trim().split(' ')[0] : '';
+    const cleanName = firstWord ? (firstWord.charAt(0).toUpperCase() + firstWord.slice(1).toLowerCase()) : 'Nombre';
+    let dateStr = 'DDMMYYYY';
+    if (birthDate) {
+      const day = String(birthDate.getDate()).padStart(2, '0');
+      const month = String(birthDate.getMonth() + 1).padStart(2, '0');
+      const year = birthDate.getFullYear();
+      dateStr = `${day}${month}${year}`;
+    }
+    return `${cleanName}${dateStr}`;
+  };
 
   const validatePatient = (): string | null => {
-    if (!newPatient.first_name || !newPatient.last_name || !newPatient.phone) {
-      return 'Todos los campos son obligatorios';
+    if (!newPatient.first_name.trim() || !newPatient.last_name.trim() || !newPatient.email.trim() || !newPatient.phone || !newPatient.birth_date || !newPatient.gender) {
+      return 'Todos los campos obligatorios (*) son requeridos';
     }
     const nameRegex = /^[a-zA-ZáéíóúüñÁÉÍÓÚÜÑ\s]{2,50}$/;
-    if (!nameRegex.test(newPatient.first_name)) {
+    if (!nameRegex.test(newPatient.first_name.trim())) {
       return 'El nombre solo puede contener letras (mín. 2)';
     }
-    if (!nameRegex.test(newPatient.last_name)) {
+    if (!nameRegex.test(newPatient.last_name.trim())) {
       return 'El apellido solo puede contener letras (mín. 2)';
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(newPatient.email.trim())) {
+      return 'El formato del correo electrónico no es válido';
     }
     if (!validatePhone(newPatient.phone)) {
       return 'El teléfono debe tener exactamente 10 dígitos';
@@ -46,33 +99,51 @@ export default function ReceptionistOpsScreen() {
         throw new Error(validationError);
       }
       const phoneCleaned = cleanPhone(newPatient.phone);
-      const email = `${phoneCleaned}@medispace.tmp`;
-      const password = 'Paciente123!';
+      const email = newPatient.email.trim();
+      const password = generateDefaultPassword(newPatient.first_name, newPatient.birth_date);
       const { data, error } = await secondarySupabase.auth.signUp({
         email,
         password,
         options: {
           data: {
-            first_name: newPatient.first_name,
-            last_name: newPatient.last_name,
+            first_name: newPatient.first_name.trim(),
+            last_name: newPatient.last_name.trim(),
             phone: phoneCleaned,
-            role: 'patient'
+            birth_date: format(newPatient.birth_date!, 'yyyy-MM-dd'),
+            gender: newPatient.gender,
+            clinical_notes: newPatient.clinical_notes.trim() || null,
+            role: 'patient',
+            created_by_reception: true
           }
         }
       });
       if (error) throw error;
+
+      // Validar si el paciente ya está registrado (User Enumeration Protection de Supabase)
+      if (data?.user && (!data.user.identities || data.user.identities.length === 0)) {
+        throw new Error('User already registered');
+      }
+
       return data.user;
     },
     onSuccess: () => {
       Toast.show({ type: 'success', text1: 'Paciente Registrado', text2: 'Ya puedes agendarle una cita.' });
       setShowQuickReg(false);
-      setNewPatient({ first_name: '', last_name: '', phone: '' });
+      setNewPatient({
+        first_name: '',
+        last_name: '',
+        email: '',
+        phone: '',
+        birth_date: null,
+        gender: null,
+        clinical_notes: '',
+      });
       Alert.alert('Registro Exitoso', '¿Deseas agendarle una cita ahora?', [
         { text: 'Más tarde' },
         { text: 'Agendar', onPress: () => router.push('/(dashboard)/catalog') }
       ]);
     },
-    onError: (err: any) => Toast.show({ type: 'error', text1: 'Error', text2: err.message }),
+    onError: (err: any) => Toast.show({ type: 'error', text1: 'Error', text2: translateSupabaseError(err.message) }),
   });
 
   const checkInMutation = useMutation({
@@ -111,7 +182,7 @@ export default function ReceptionistOpsScreen() {
         </View>
         <TouchableOpacity style={styles.quickAddBtn} onPress={() => setShowQuickReg(true)}>
           <Ionicons name="person-add" size={20} color="white" />
-          <Text style={styles.quickAddBtnText}>Alta Exprés</Text>
+          <Text style={styles.quickAddBtnText}>Alta de Paciente</Text>
         </TouchableOpacity>
       </View>
 
@@ -188,24 +259,143 @@ export default function ReceptionistOpsScreen() {
           <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalContainer}>
             <View style={styles.modalContent}>
               <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Alta Exprés</Text>
-                <TouchableOpacity onPress={() => setShowQuickReg(false)}><Ionicons name="close" size={24} color={Colors.textMuted} /></TouchableOpacity>
+                <Text style={styles.modalTitle}>Alta de Paciente</Text>
+                <TouchableOpacity onPress={() => setShowQuickReg(false)}>
+                  <Ionicons name="close" size={24} color={Colors.textMuted} />
+                </TouchableOpacity>
               </View>
-              <View style={styles.inputGroup}><Text style={styles.inputLabel}>Nombre</Text><TextInput style={styles.input} value={newPatient.first_name} onChangeText={t => setNewPatient(p => ({...p, first_name: t}))}/></View>
-              <View style={styles.inputGroup}><Text style={styles.inputLabel}>Apellido</Text><TextInput style={styles.input} value={newPatient.last_name} onChangeText={t => setNewPatient(p => ({...p, last_name: t}))}/></View>
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Teléfono</Text>
-                <TextInput 
-                  style={styles.input} 
-                  keyboardType="phone-pad" 
-                  value={newPatient.phone} 
-                  onChangeText={t => setNewPatient(p => ({...p, phone: formatPhone(t)}))}
-                  maxLength={14}
-                  placeholder="(000) 000-0000"
-                />
-              </View>
-              <TouchableOpacity style={styles.submitBtn} onPress={() => quickRegisterMutation.mutate()} disabled={quickRegisterMutation.isPending}>
-                {quickRegisterMutation.isPending ? <ActivityIndicator color="white" /> : <Text style={styles.submitBtnText}>Crear Paciente</Text>}
+
+              <ScrollView 
+                contentContainerStyle={styles.modalFormScroll}
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+              >
+                <View style={styles.row}>
+                  <View style={[styles.inputGroup, { flex: 1 }]}>
+                    <Text style={styles.inputLabel}>Nombre *</Text>
+                    <TextInput 
+                      style={styles.input} 
+                      placeholder="Juan" 
+                      placeholderTextColor={Colors.textMuted}
+                      value={newPatient.first_name} 
+                      onChangeText={t => setNewPatient(p => ({...p, first_name: t}))}
+                    />
+                  </View>
+                  <View style={[styles.inputGroup, { flex: 1 }]}>
+                    <Text style={styles.inputLabel}>Apellido *</Text>
+                    <TextInput 
+                      style={styles.input} 
+                      placeholder="Pérez" 
+                      placeholderTextColor={Colors.textMuted}
+                      value={newPatient.last_name} 
+                      onChangeText={t => setNewPatient(p => ({...p, last_name: t}))}
+                    />
+                  </View>
+                </View>
+
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Correo *</Text>
+                  <TextInput 
+                    style={styles.input} 
+                    placeholder="paciente@correo.com" 
+                    placeholderTextColor={Colors.textMuted}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    value={newPatient.email} 
+                    onChangeText={t => setNewPatient(p => ({...p, email: t}))}
+                  />
+                </View>
+
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Teléfono *</Text>
+                  <TextInput 
+                    style={styles.input} 
+                    keyboardType="phone-pad" 
+                    value={newPatient.phone} 
+                    onChangeText={t => setNewPatient(p => ({...p, phone: formatPhone(t)}))}
+                    maxLength={14}
+                    placeholder="(000) 000-0000"
+                    placeholderTextColor={Colors.textMuted}
+                  />
+                </View>
+
+                <View style={styles.row}>
+                  <View style={[styles.inputGroup, { flex: 1 }]}>
+                    <Text style={styles.inputLabel}>F. Nacimiento *</Text>
+                    <TouchableOpacity style={styles.dateInput} onPress={() => setShowDatePicker(true)}>
+                      <Ionicons name="calendar-outline" size={18} color={Colors.textMuted} />
+                      <Text style={[styles.dateText, !newPatient.birth_date && { color: Colors.textMuted }]}>
+                        {newPatient.birth_date ? format(newPatient.birth_date, 'dd/MM/yyyy') : 'Seleccionar'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  <View style={[styles.inputGroup, { flex: 1.2 }]}>
+                    <Text style={styles.inputLabel}>Sexo *</Text>
+                    <View style={styles.genderRow}>
+                      {(['male', 'female', 'other'] as const).map((g) => (
+                        <TouchableOpacity 
+                          key={g} 
+                          style={[styles.genderBtn, newPatient.gender === g && styles.genderBtnActive]} 
+                          onPress={() => setNewPatient(p => ({ ...p, gender: g }))}
+                        >
+                          <Text style={[styles.genderBtnText, newPatient.gender === g && styles.genderBtnTextActive]}>
+                            {g === 'male' ? 'M' : g === 'female' ? 'F' : 'O'}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+                </View>
+
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Datos Clínicos (Opcional)</Text>
+                  <TextInput 
+                    style={[styles.input, styles.textArea]} 
+                    placeholder="Alergias, enfermedades crónicas, cirugías..." 
+                    placeholderTextColor={Colors.textMuted} 
+                    multiline
+                    numberOfLines={3}
+                    value={newPatient.clinical_notes} 
+                    onChangeText={t => setNewPatient(p => ({...p, clinical_notes: t}))} 
+                  />
+                </View>
+
+                <View style={styles.passwordNotice}>
+                  <Ionicons name="key" size={18} color={Colors.secondary} />
+                  <Text style={styles.passwordNoticeText}>
+                    Contraseña: <Text style={{ fontWeight: '800', color: Colors.primary }}>{generateDefaultPassword(newPatient.first_name, newPatient.birth_date)}</Text>
+                  </Text>
+                </View>
+              </ScrollView>
+
+              <DateTimePickerModal
+                isVisible={showDatePicker}
+                mode="date"
+                date={newPatient.birth_date || new Date()}
+                textColor={Colors.primary}
+                maximumDate={new Date()}
+                onConfirm={handleConfirmDate}
+                onCancel={() => setShowDatePicker(false)}
+                isDarkModeEnabled={false}
+                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                pickerContainerStyleIOS={{ backgroundColor: Colors.surface }}
+                pickerComponentStyleIOS={{ backgroundColor: Colors.surface }}
+                customCancelButtonIOS={(props) => <CustomCancelButton onPress={props.onPress} label={props.label} />}
+                customConfirmButtonIOS={(props) => <CustomConfirmButton onPress={props.onPress} label={props.label} />}
+                customHeaderIOS={(props) => <CustomHeader label={props.label} />}
+              />
+
+              <TouchableOpacity 
+                style={styles.submitBtn} 
+                onPress={() => quickRegisterMutation.mutate()} 
+                disabled={quickRegisterMutation.isPending}
+              >
+                {quickRegisterMutation.isPending ? (
+                  <ActivityIndicator color="white" />
+                ) : (
+                  <Text style={styles.submitBtnText}>Crear Paciente</Text>
+                )}
               </TouchableOpacity>
             </View>
           </KeyboardAvoidingView>
@@ -246,13 +436,26 @@ const styles = StyleSheet.create({
   emptyState: { padding: 20, alignItems: 'center', backgroundColor: '#f8fafc', borderRadius: 12, borderStyle: 'dashed', borderWidth: 1, borderColor: '#cbd5e1' },
   emptyText: { color: Colors.textMuted, fontWeight: '600', fontSize: 13 },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 20 },
-  modalContainer: { width: '100%' },
-  modalContent: { backgroundColor: 'white', borderRadius: 24, padding: 24 },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+  modalContainer: { width: '100%', maxHeight: '90%' },
+  modalContent: { backgroundColor: 'white', borderRadius: 24, padding: 20, gap: 12 },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
   modalTitle: { fontSize: 20, fontWeight: '900', color: Colors.primary },
-  inputGroup: { marginBottom: 16 },
-  inputLabel: { fontSize: 12, fontWeight: '700', color: Colors.textMuted, marginBottom: 8 },
-  input: { backgroundColor: '#f1f5f9', borderRadius: 12, padding: 12, fontSize: 16, fontWeight: '600' },
-  submitBtn: { backgroundColor: Colors.secondary, padding: 16, borderRadius: 12, alignItems: 'center', marginTop: 10 },
-  submitBtnText: { color: 'white', fontWeight: '800', fontSize: 16 },
+  modalFormScroll: { gap: 14, paddingBottom: 10 },
+  row: { flexDirection: 'row', gap: 12 },
+  inputGroup: { gap: 6 },
+  inputLabel: { fontSize: 11, fontWeight: '700', color: Colors.primary, textTransform: 'uppercase', letterSpacing: 0.5 },
+  input: { backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border, borderRadius: BorderRadius.md, paddingHorizontal: 12, paddingVertical: 10, fontSize: 15, color: Colors.text },
+  textArea: { height: 60, textAlignVertical: 'top' },
+  dateInput: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border, borderRadius: BorderRadius.md, paddingHorizontal: 12, paddingVertical: 10 },
+  dateText: { fontSize: 15, color: Colors.text },
+  genderRow: { flexDirection: 'row', gap: 6 },
+  genderBtn: { flex: 1, backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border, borderRadius: BorderRadius.md, paddingVertical: 10, alignItems: 'center' },
+  genderBtnActive: { backgroundColor: Colors.secondary, borderColor: Colors.secondary },
+  genderBtnText: { fontSize: 13, fontWeight: '700', color: Colors.textSecondary },
+  genderBtnTextActive: { color: '#fff' },
+  passwordNotice: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#f5f3ff', borderLeftWidth: 4, borderLeftColor: Colors.secondary, padding: 12, borderRadius: 8, marginTop: 4 },
+  passwordNoticeText: { fontSize: 13, color: Colors.textSecondary, flex: 1 },
+  submitBtn: { backgroundColor: Colors.secondary, padding: 14, borderRadius: BorderRadius.full, alignItems: 'center', marginTop: 10, shadowColor: Colors.secondary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8, elevation: 4 },
+  submitBtnText: { color: 'white', fontWeight: '800', fontSize: 15 },
 });
+

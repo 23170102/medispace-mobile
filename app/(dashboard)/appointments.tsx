@@ -265,7 +265,8 @@ export default function AppointmentsScreen() {
     return patientName.includes(q) || doctorName.includes(q);
   }) || [];
 
-  const upcoming = filteredAppointments.filter(a => ['scheduled', 'confirmed', 'arrived'].includes(a.status)) || [];
+  const upcoming = (filteredAppointments.filter(a => ['scheduled', 'confirmed', 'arrived'].includes(a.status)) || [])
+    .sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime());
   const past = filteredAppointments.filter(a => ['completed', 'cancelled'].includes(a.status)) || [];
 
   return (

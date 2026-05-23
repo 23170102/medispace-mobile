@@ -22,18 +22,15 @@ export default function LoginScreen() {
   const [isKeyboardVisible, setKeyboardVisible] = useState(false);
 
   useEffect(() => {
-    const keyboardDidShowListener = Keyboard.addListener(
-      'keyboardDidShow',
-      () => setKeyboardVisible(true)
-    );
-    const keyboardDidHideListener = Keyboard.addListener(
-      'keyboardDidHide',
-      () => setKeyboardVisible(false)
-    );
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+
+    const showListener = Keyboard.addListener(showEvent, () => setKeyboardVisible(true));
+    const hideListener = Keyboard.addListener(hideEvent, () => setKeyboardVisible(false));
 
     return () => {
-      keyboardDidHideListener.remove();
-      keyboardDidShowListener.remove();
+      showListener.remove();
+      hideListener.remove();
     };
   }, []);
 
@@ -96,7 +93,7 @@ export default function LoginScreen() {
           isKeyboardVisible && styles.headerBackgroundCollapsed
         ]}
       >
-        <SafeAreaView>
+        <SafeAreaView edges={['top']}>
           <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace('/')} style={styles.backBtn}>
             <Ionicons name="arrow-back" size={24} color={Colors.white} />
           </TouchableOpacity>
@@ -120,15 +117,21 @@ export default function LoginScreen() {
       </LinearGradient>
 
       <KeyboardAvoidingView 
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined} 
         style={[styles.formArea, isKeyboardVisible && styles.formAreaCollapsed]}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
       >
         <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
-          <View style={styles.formCard}>
-            <Text style={styles.formTitle}>Inicia Sesión</Text>
+          <View style={[
+            styles.formCard,
+            isKeyboardVisible && styles.formCardCollapsed
+          ]}>
+            <Text style={[styles.formTitle, isKeyboardVisible && styles.formTitleCollapsed]}>Inicia Sesión</Text>
             
-            <View style={styles.inputGroup}>
+            <View style={[
+              styles.inputGroup,
+              isKeyboardVisible && styles.inputGroupCollapsed
+            ]}>
               <Text style={styles.label}>Correo electrónico</Text>
               <View style={styles.inputWrapper}>
                 <Ionicons name="mail-outline" size={20} color={Colors.textMuted} style={styles.inputIcon} />
@@ -144,7 +147,10 @@ export default function LoginScreen() {
               </View>
             </View>
 
-            <View style={styles.inputGroup}>
+            <View style={[
+              styles.inputGroup,
+              isKeyboardVisible && styles.inputGroupCollapsed
+            ]}>
               <Text style={styles.label}>Contraseña</Text>
               <View style={styles.inputWrapper}>
                 <Ionicons name="lock-closed-outline" size={20} color={Colors.textMuted} style={styles.inputIcon} />
@@ -164,7 +170,7 @@ export default function LoginScreen() {
             </View>
 
             <TouchableOpacity 
-              style={styles.forgotBtn} 
+              style={[styles.forgotBtn, isKeyboardVisible && styles.forgotBtnCollapsed]} 
               onPress={() => router.push('/forgot-password')}
             >
               <Text style={styles.forgotText}>¿Olvidaste tu contraseña?</Text>
@@ -207,13 +213,16 @@ const styles = StyleSheet.create({
   
   formArea: { flex: 1, marginTop: -70 },
   formAreaCollapsed: { marginTop: -20 },
-  scrollContent: { paddingHorizontal: Spacing.lg, paddingBottom: 40 },
+  scrollContent: { flexGrow: 1, paddingHorizontal: Spacing.lg, paddingBottom: 40 },
   formCard: { 
     backgroundColor: Colors.white, borderRadius: BorderRadius.xxl, 
     padding: Spacing.xl, ...Shadows.large,
   },
+  formCardCollapsed: { padding: Spacing.lg },
   formTitle: { fontSize: 22, fontWeight: '800', color: Colors.primary, marginBottom: 28, textAlign: 'center' },
+  formTitleCollapsed: { marginBottom: 16 },
   inputGroup: { marginBottom: 20 },
+  inputGroupCollapsed: { marginBottom: 12 },
   label: { fontSize: 11, fontWeight: '800', color: Colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8, marginLeft: 4 },
   inputWrapper: {
     flexDirection: 'row', alignItems: 'center', backgroundColor: '#f8fafc',
@@ -224,6 +233,7 @@ const styles = StyleSheet.create({
   eyeBtn: { padding: Spacing.sm },
   
   forgotBtn: { alignSelf: 'flex-end', marginBottom: 28 },
+  forgotBtnCollapsed: { marginBottom: 16 },
   forgotText: { color: Colors.accent, fontSize: 13, fontWeight: '700' },
   
   loginBtn: { borderRadius: BorderRadius.full, overflow: 'hidden', ...Shadows.medium },

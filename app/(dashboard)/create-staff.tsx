@@ -65,6 +65,11 @@ export default function CreateStaffScreen() {
       if (authError) throw authError;
       if (!authData?.user) throw new Error('No se pudo crear el usuario');
 
+      // Validar si el correo ya está registrado (User Enumeration Protection de Supabase)
+      if (authData.user && (!authData.user.identities || authData.user.identities.length === 0)) {
+        throw new Error('User already registered');
+      }
+
       const newUserId = authData.user.id;
 
       // Esperar un momento para que el trigger de Supabase cree el perfil inicial

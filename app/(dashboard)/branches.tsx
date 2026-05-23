@@ -32,8 +32,17 @@ export default function BentoBranchesScreen() {
 
   const saveMutation = useMutation({
     mutationFn: async () => {
+      if (formData.phone && !validatePhone(formData.phone)) {
+        throw new Error('El teléfono de la sucursal no es válido (deben ser 10 dígitos)');
+      }
+
+      const cleanedData = {
+        ...formData,
+        phone: formData.phone ? cleanPhone(formData.phone) : null
+      };
+
       if (editingBranch) {
-        const { error } = await supabase.from('branches').update(formData).eq('id', editingBranch.id);
+        const { error } = await supabase.from('branches').update(cleanedData).eq('id', editingBranch.id);
         if (error) throw error;
         if (editingBranch.status !== formData.status) {
           const { error: officesError } = await supabase
@@ -43,13 +52,7 @@ export default function BentoBranchesScreen() {
           if (officesError) throw officesError;
         }
       } else {
-        if (formData.phone && !validatePhone(formData.phone)) {
-          throw new Error('El teléfono de la sucursal no es válido (deben ser 10 dígitos)');
-        }
-        const { error } = await supabase.from('branches').insert({
-          ...formData,
-          phone: cleanPhone(formData.phone)
-        });
+        const { error } = await supabase.from('branches').insert(cleanedData);
         if (error) throw error;
       }
     },
@@ -68,7 +71,7 @@ export default function BentoBranchesScreen() {
       setFormData({ 
         name: branch.name, 
         address: branch.address, 
-        phone: branch.phone || '', 
+        phone: branch.phone ? formatPhone(branch.phone) : '', 
         status: (branch.status || 'active') as 'active' | 'suspended' 
       });
     } else {
@@ -113,7 +116,7 @@ export default function BentoBranchesScreen() {
           </View>
           <View style={styles.infoRow}>
             <Ionicons name="call-outline" size={12} color={Colors.textMuted} />
-            <Text style={styles.branchPhone}>{item.phone || 'N/A'}</Text>
+            <Text style={styles.branchPhone}>{item.phone ? formatPhone(item.phone) : 'N/A'}</Text>
           </View>
         </View>
 
