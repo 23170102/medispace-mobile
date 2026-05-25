@@ -258,8 +258,8 @@ export default function AppointmentsScreen() {
   };
 
   const filteredAppointments = appointments?.filter(apt => {
-    if (!searchQuery) return true;
-    const q = searchQuery.toLowerCase();
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return true;
     const patientName = `${apt.patient_profile?.first_name} ${apt.patient_profile?.last_name}`.toLowerCase();
     const doctorName = `${apt.doctor_profile?.first_name} ${apt.doctor_profile?.last_name}`.toLowerCase();
     return patientName.includes(q) || doctorName.includes(q);

@@ -7,6 +7,7 @@ import { format } from 'date-fns';
 import DateTimePickerModal from 'react-native-modal-datetime-picker';
 import Toast from 'react-native-toast-message';
 import { supabase } from '../lib/supabase';
+import { hasInternetConnection } from '../lib/network';
 import { validatePhone, formatPhone, cleanPhone, translateSupabaseError } from '../lib/validation';
 import { Colors, Spacing, FontSizes, BorderRadius } from '../constants/theme';
 
@@ -53,6 +54,10 @@ export default function RegisterScreen() {
     }
     if (phone && !validatePhone(phone)) {
       Toast.show({ type: 'error', text1: 'Teléfono inválido', text2: 'Ingresa un número de 10 dígitos' });
+      return;
+    }
+    if (!(await hasInternetConnection())) {
+      Toast.show({ type: 'error', text1: 'Sin internet', text2: 'Conéctate a internet para crear tu cuenta.' });
       return;
     }
 

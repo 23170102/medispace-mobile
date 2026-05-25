@@ -80,8 +80,9 @@ export default function CatalogScreen() {
     setRefreshing(false);
   };
 
+  const normalizedSearch = search.trim().toLowerCase();
   const filtered = doctors?.filter(d =>
-    `${d.first_name || ''} ${d.last_name || ''} ${d.specialty || ''}`.toLowerCase().includes(search.toLowerCase())
+    !normalizedSearch || `${d.first_name || ''} ${d.last_name || ''} ${d.specialty || ''}`.toLowerCase().includes(normalizedSearch)
   ) || [];
 
   return (

@@ -22,6 +22,8 @@ export default function PatientRecordScreen() {
   const queryClient = useQueryClient();
   const { user, roles } = useAuth();
   const isDoctor = roles.includes('doctor');
+  const patientIdValue = Array.isArray(patientId) ? patientId[0] : patientId;
+  const isOwner = user?.id === patientIdValue;
   const [updatingPhoto, setUpdatingPhoto] = useState(false);
   
   const [activeTab, setActiveTab] = useState<TabType>('evolucion');
@@ -95,7 +97,7 @@ export default function PatientRecordScreen() {
       const response = await fetch(uri);
       const blob = await response.blob();
       const fileExt = uri.split('.').pop();
-      const filePath = `${patientId}/${Math.random()}.${fileExt}`;
+      const filePath = `${patientIdValue}/${Math.random()}.${fileExt}`;
 
       const { error: uploadError } = await supabase.storage.from('avatars').upload(filePath, blob, {
         contentType: `image/${fileExt === 'jpg' || fileExt === 'jpeg' ? 'jpeg' : fileExt}`,
@@ -104,7 +106,7 @@ export default function PatientRecordScreen() {
       if (uploadError) throw uploadError;
 
       const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(filePath);
-      const { error: updateError } = await supabase.from('usuarios').update({ avatar_url: publicUrl }).eq('id', patientId);
+      const { error: updateError } = await supabase.from('usuarios').update({ avatar_url: publicUrl }).eq('id', patientIdValue);
       if (updateError) throw updateError;
 
       await refetchPatient();
@@ -116,13 +118,39 @@ export default function PatientRecordScreen() {
     }
   };
 
+  const { data: canAccessRecord, isLoading: isCheckingAccess } = useQuery({
+    queryKey: ['doctor-record-access', patientIdValue, user?.id],
+    queryFn: async () => {
+      if (!isDoctor || isOwner || !user?.id || !patientIdValue) return true;
+
+      const { data: appointmentAccess, error: appointmentError } = await supabase
+        .from('appointments')
+        .select('id')
+        .eq('patient_id', patientIdValue)
+        .eq('doctor_id', user.id)
+        .limit(1);
+      if (appointmentError) throw appointmentError;
+      if (appointmentAccess?.length) return true;
+
+      const { data: recordAccess, error: recordError } = await supabase
+        .from('medical_records')
+        .select('id')
+        .eq('patient_id', patientIdValue)
+        .eq('doctor_id', user.id)
+        .limit(1);
+      if (recordError) throw recordError;
+      return !!recordAccess?.length;
+    },
+    enabled: !!user?.id && !!patientIdValue,
+  });
+
   const { data: patient, isLoading: isLoadingPatient, refetch: refetchPatient } = useQuery({
     queryKey: ['patient-profile', patientId],
     queryFn: async () => {
       const { data: usuario, error } = await supabase
         .from('profiles')
         .select('id, first_name, last_name, avatar_url, phone, patient_details(address, emergency_contact_name, emergency_contact_phone, blood_type, allergies, gender, birth_date, family_history, pathological_history, non_pathological_history, obstetric_history)')
-        .eq('id', patientId)
+        .eq('id', patientIdValue)
         .single();
       if (error) throw error;
       
@@ -149,6 +177,7 @@ export default function PatientRecordScreen() {
         }
       };
     },
+    enabled: !!patientIdValue && (!isDoctor || isOwner || canAccessRecord === true),
   });
 
 
@@ -175,20 +204,29 @@ export default function PatientRecordScreen() {
   }, [appointmentId]);
 
   const { data: records, isLoading: isLoadingRecords, refetch: refetchRecords } = useQuery({
-    queryKey: ['patient-records', patientId],
+    queryKey: ['patient-records', patientId, user?.id, isDoctor],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from('medical_records')
         .select('*')
-        .eq('patient_id', patientId)
+        .eq('patient_id', patientIdValue)
         .order('created_at', { ascending: false });
+      if (isDoctor) {
+        query = query.eq('doctor_id', user?.id);
+      }
+      const { data, error } = await query;
       if (error) throw error;
       return data || [];
     },
+    enabled: !!patientIdValue && (!isDoctor || isOwner || canAccessRecord === true),
   });
 
   const createNoteMutation = useMutation({
     mutationFn: async () => {
+      if (!newNote.reason.trim() || !newNote.diagnosis.trim() || !newNote.treatment.trim()) {
+        throw new Error('Completa los campos requeridos de la nota');
+      }
+
       // Aseguramos que el ID sea un string puro
       let targetId = Array.isArray(appointmentId) ? appointmentId[0] : appointmentId;
 
@@ -197,7 +235,7 @@ export default function PatientRecordScreen() {
         const { data: apts } = await supabase
           .from('appointments')
           .select('id')
-          .eq('patient_id', patientId)
+          .eq('patient_id', patientIdValue)
           .eq('doctor_id', user?.id)
           .in('status', ['scheduled', 'confirmed'])
           .order('start_time', { ascending: true })
@@ -208,7 +246,7 @@ export default function PatientRecordScreen() {
       // attempting to close appointment id
 
       const { error: recordError } = await supabase.from('medical_records').insert({
-        patient_id: patientId as string,
+        patient_id: patientIdValue as string,
         doctor_id: user?.id as string,
         appointment_id: targetId || null,
         reason: newNote.reason,
@@ -286,7 +324,7 @@ export default function PatientRecordScreen() {
           non_pathological_history: editedHistory.non_pathological,
           obstetric_history: editedHistory.obs_history
         })
-        .eq('user_id', patientId);
+        .eq('user_id', patientIdValue);
 
       if (error) throw error;
     },
@@ -303,7 +341,8 @@ export default function PatientRecordScreen() {
       const { error } = await supabase
         .from('medical_records')
         .delete()
-        .eq('id', recordId);
+        .eq('id', recordId)
+        .eq('doctor_id', user?.id);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -399,9 +438,15 @@ export default function PatientRecordScreen() {
     }
   };
 
-  const isOwner = user?.id === patientId;
+  if (isCheckingAccess || (isDoctor && canAccessRecord === undefined)) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator size="large" color={Colors.secondary} />
+      </View>
+    );
+  }
 
-  if (!isDoctor && !isOwner && !isLoadingPatient) {
+  if ((isDoctor && canAccessRecord === false) || (!isDoctor && !isOwner && !isLoadingPatient)) {
     return (
       <SafeAreaView style={styles.center}>
         <Ionicons name="lock-closed" size={64} color={Colors.textMuted} style={{ marginBottom: 20 }} />
@@ -612,7 +657,7 @@ export default function PatientRecordScreen() {
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={{ paddingBottom: 40 }}
               >
-              <Text style={styles.formLabel}>Padecimiento Actual (Interrogatorio)</Text>
+              <Text style={styles.formLabel}>Padecimiento Actual (Interrogatorio) *</Text>
               <TextInput 
                 style={[styles.input, styles.textArea]} 
                 multiline 
@@ -641,10 +686,10 @@ export default function PatientRecordScreen() {
                 onChangeText={(t) => setNewNote({...newNote, physical_exam: t})}
               />
 
-              <Text style={styles.formLabel}>Diagnóstico</Text>
+              <Text style={styles.formLabel}>Diagnóstico *</Text>
               <TextInput style={styles.input} placeholder="Impresión diagnóstica" value={newNote.diagnosis} onChangeText={(t) => setNewNote({...newNote, diagnosis: t})} />
 
-              <Text style={styles.formLabel}>Tratamiento / Plan</Text>
+              <Text style={styles.formLabel}>Tratamiento / Plan *</Text>
               <TextInput style={[styles.input, styles.textArea]} multiline placeholder="Indicaciones médicas..." value={newNote.treatment} onChangeText={(t) => setNewNote({...newNote, treatment: t})} />
 
               <TouchableOpacity 

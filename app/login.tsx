@@ -7,6 +7,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Toast from 'react-native-toast-message';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
+import { hasInternetConnection } from '../lib/network';
 import { translateSupabaseError } from '../lib/validation';
 import { Colors, Spacing, FontSizes, BorderRadius, Gradients, Shadows } from '../constants/theme';
 
@@ -37,6 +38,10 @@ export default function LoginScreen() {
   const handleLogin = async () => {
     if (!email.trim() || !password.trim()) {
       Toast.show({ type: 'error', text1: 'Campos requeridos', text2: 'Por favor ingresa tu correo y contraseña' });
+      return;
+    }
+    if (!(await hasInternetConnection())) {
+      Toast.show({ type: 'error', text1: 'Sin internet', text2: 'Conéctate a internet para entrar.' });
       return;
     }
     setIsSubmitting(true);
@@ -132,7 +137,7 @@ export default function LoginScreen() {
               styles.inputGroup,
               isKeyboardVisible && styles.inputGroupCollapsed
             ]}>
-              <Text style={styles.label}>Correo electrónico</Text>
+              <Text style={styles.label}>Correo electrónico *</Text>
               <View style={styles.inputWrapper}>
                 <Ionicons name="mail-outline" size={20} color={Colors.textMuted} style={styles.inputIcon} />
                 <TextInput
@@ -151,7 +156,7 @@ export default function LoginScreen() {
               styles.inputGroup,
               isKeyboardVisible && styles.inputGroupCollapsed
             ]}>
-              <Text style={styles.label}>Contraseña</Text>
+              <Text style={styles.label}>Contraseña *</Text>
               <View style={styles.inputWrapper}>
                 <Ionicons name="lock-closed-outline" size={20} color={Colors.textMuted} style={styles.inputIcon} />
                 <TextInput

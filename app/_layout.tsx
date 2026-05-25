@@ -7,6 +7,7 @@ import Toast from 'react-native-toast-message';
 import { AuthProvider, useAuth } from '../hooks/useAuth';
 import { useNotifications } from '../hooks/useNotifications';
 import NotificationHandler from '../components/notifications/NotificationHandler';
+import ConnectivityGate from '../components/network/ConnectivityGate';
 
 const queryClient = new QueryClient();
 
@@ -61,6 +62,7 @@ export default function RootLayout() {
             </Stack>
           </AuthGate>
           <StatusBar style="dark" />
+          <ConnectivityGate />
           <Toast />
         </AuthProvider>
       </SafeAreaProvider>

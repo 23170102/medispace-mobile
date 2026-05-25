@@ -65,7 +65,8 @@ export default function BookAppointmentScreen() {
 
   const searchPatients = async (query: string) => {
     setPatientSearch(query);
-    if (query.length < 3) {
+    const normalizedQuery = query.trim();
+    if (normalizedQuery.length < 3) {
       setPatientResults([]);
       return;
     }
@@ -74,7 +75,7 @@ export default function BookAppointmentScreen() {
       .from('profiles')
       .select('id, first_name, last_name, phone')
       .eq('role', 'patient')
-      .or(`first_name.ilike.%${query}%,last_name.ilike.%${query}%,phone.ilike.%${query}%`)
+      .or(`first_name.ilike.%${normalizedQuery}%,last_name.ilike.%${normalizedQuery}%,phone.ilike.%${normalizedQuery}%`)
       .limit(5);
     setPatientResults(data || []);
     setIsSearchingPatient(false);
@@ -90,6 +91,11 @@ export default function BookAppointmentScreen() {
   const handleExpiryChange = (text: string) => {
     let clean = text.replace(/\D/g, '');
     if (clean.length > 4) clean = clean.slice(0, 4);
+    if (clean.length >= 2) {
+      const month = Number(clean.slice(0, 2));
+      if (month > 12) clean = '12' + clean.slice(2);
+      if (month === 0) clean = '01' + clean.slice(2);
+    }
     let formatted = clean;
     if (clean.length > 2) formatted = clean.slice(0, 2) + '/' + clean.slice(2);
     setCardExpiry(formatted);
@@ -190,7 +196,7 @@ export default function BookAppointmentScreen() {
         .eq('doctor_id', doctorId)
         .gte('start_time', new Date(`${selectedDate}T00:00:00`).toISOString())
         .lte('start_time', new Date(`${selectedDate}T23:59:59`).toISOString())
-        .in('status', ['scheduled', 'confirmed']);
+        .in('status', ['scheduled', 'confirmed', 'arrived', 'blocked']);
       return data || [];
     },
     enabled: !!selectedDate,
@@ -636,7 +642,7 @@ export default function BookAppointmentScreen() {
                     <Text style={styles.cardFormTitle}>Datos de tu Tarjeta</Text>
                     
                     <View style={styles.inputContainer}>
-                      <Text style={styles.inputLabel}>Número de Tarjeta</Text>
+                      <Text style={styles.inputLabel}>Número de Tarjeta *</Text>
                       <View style={styles.inputWrapper}>
                         <Ionicons name="card-outline" size={20} color={Colors.textMuted} style={styles.inputIcon} />
                         <TextInput
@@ -652,7 +658,7 @@ export default function BookAppointmentScreen() {
 
                     <View style={styles.inputRow}>
                       <View style={[styles.inputContainer, { flex: 1 }]}>
-                        <Text style={styles.inputLabel}>Vencimiento</Text>
+                        <Text style={styles.inputLabel}>Vencimiento *</Text>
                         <View style={styles.inputWrapper}>
                           <TextInput 
                             style={styles.input} 
@@ -666,7 +672,7 @@ export default function BookAppointmentScreen() {
                       </View>
                       
                       <View style={[styles.inputContainer, { flex: 1 }]}>
-                        <Text style={styles.inputLabel}>CVC</Text>
+                        <Text style={styles.inputLabel}>CVC *</Text>
                         <View style={styles.inputWrapper}>
                           <TextInput 
                             style={styles.input} 

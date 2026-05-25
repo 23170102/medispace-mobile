@@ -60,8 +60,10 @@ export default function MedicalRecordsScreen() {
 
   const filteredPatients = useMemo(() => {
     if (!patients) return [];
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return patients;
     return patients.filter(p => 
-      `${p.first_name} ${p.last_name}`.toLowerCase().includes(searchQuery.toLowerCase())
+      `${p.first_name} ${p.last_name}`.toLowerCase().includes(q)
     );
   }, [searchQuery, patients]);
 
